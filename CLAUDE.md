@@ -248,27 +248,29 @@ Use mcp__chromadb-memory__store_memory:
   - Hierarchical section organization (Part → Chapter → Section)
   - API endpoints for CRUD operations (15 endpoints)
   - 📖 Books tab in sidebar with book card list
-  - **BookViewer** (217 lines): Full-screen book editor in main workspace
+  - **BookViewer** (228 lines): Full-screen book editor in main workspace
     - Click book card → opens in main pane (not sidebar)
     - Left: Section navigator sidebar (264px) with all sections
     - Right: Resizable markdown editor/preview panes (react-resizable-panels)
     - Drag purple handle to resize editor/preview (25-75% range)
     - Auto-loads first section on open
     - Close button returns to book list
-  - **MarkdownEditor** (306 lines): Resizable split-pane editor with live preview
+  - **MarkdownEditor** (377 lines): Resizable split-pane editor with live preview + content cards
     - LaTeX/math rendering (KaTeX)
     - Syntax highlighting for code blocks (react-syntax-highlighter)
     - Enhanced table styling with borders/headers
     - Image display with hover effects
     - Prev/Next section navigation buttons
     - Keyboard shortcuts (Ctrl+→/← for navigation)
+    - **Content Cards Display** (Phase 1): Shows linked chunks/transformations as cards above editor
     - **Resizable panes**: Drag handle between editor/preview (react-resizable-panels)
+  - **ContentCard** (103 lines): Display linked content with source attribution
   - **BookSectionSelector** (488 lines): Create books/sections on-the-fly from messages
   - **"📖 Add to Book" button** in MessageLightbox
   - **Multiple messages per section**: Appends with separator
   - Save with Ctrl/Cmd+S, auto-save on section switch
+  - **Book deletion safeguards**: Confirmation dialogs, user_id migration fixes
   - Configuration storage (JSONB for TOML-assisted UI)
-  - **Known issue**: Some books disappearing (needs investigation of CASCADE delete behavior)
 - ✅ **VISION SYSTEM BACKEND (Oct 5, 2025)** - COMPLETE:
   - Claude vision API integration (OCR, describe, analyze, diagram extraction)
   - Image upload with metadata extraction (EXIF, AI prompts, dimensions)
@@ -332,8 +334,8 @@ Use mcp__chromadb-memory__store_memory:
   - Remaining 6,799 files truly absent from all archive versions
 
 **Missing Features** ❌:
+- ❌ **Book Builder Phase 2**: CRUD operations on content cards (add/edit/delete/reorder)
 - ❌ Vision job processor handlers (background OCR processing)
-- ❌ Direct Photos.app album viewing (currently export-only workflow)
 - ❌ Transformation → Media linkage (TODO in library_routes.py:684)
 - ❌ ImageBrowser → Book integration (add images to book sections)
 - ❌ TOML-assisted configuration UI
@@ -343,8 +345,10 @@ Use mcp__chromadb-memory__store_memory:
 - ❌ Bibliography generator
 
 **Known Bugs** 🐛:
-- 🐛 **Book disappearing bug**: User reports scrapbook disappeared (needs CASCADE delete investigation)
-- 🐛 **Potential deletion confirmation**: No confirmation dialog when deleting books
+- ✅ ~~Book disappearing bug~~ - FIXED (user_id migration + optional filtering)
+- ✅ ~~Missing deletion confirmations~~ - FIXED (added to books and sections)
+- ✅ ~~BookViewer layout bug~~ - FIXED (now fills full width)
+- ✅ ~~ConversationViewer images broken~~ - FIXED (added /file suffix to URLs)
 
 **Large Files Needing Refactoring**:
 - ✅ `backend/services/madhyamaka/` (REFACTORED + TESTED) - Was 1003 lines, now 10 modular files (2,132 total)
@@ -371,8 +375,9 @@ Chunks: 33,952
 Media: 8,640 total (1,841 with files, 6,799 missing after recovery)
 Collections: ChatGPT archive imported
 Pipeline: 13+ jobs (multiple completed transformations across all 4 types)
-Books: 4 active (fully persistent across sessions)
+Books: 4 active (all under single user_id, fully persistent)
 Book Sections: 7 sections with markdown content
+Book Content Links: 16 (chunks linked to sections for composable content)
 Images Browsable: 1,841 images with infinite scroll + metadata
 ```
 
@@ -663,37 +668,60 @@ By following this checklist, Claude Code will:
 
 ## 🚀 Next Session Priorities
 
-Based on current state, next session should focus on:
+Based on current state (Oct 6, 2025 - Phase 1 Complete), next session should focus on:
 
-**Priority 1: Image Gallery & Browser** (Vision System - 40% remaining)
-- ImageGallery component: grid view, slideshow mode, filtering by generator/date
-- ImageBrowser modal for adding images to books
-- Display detected AI prompts and metadata in gallery
-- Integration with book builder
+**Priority 1: Book Builder Phase 2** (6-8 hours) 🎯 HIGHEST PRIORITY
+**Objective**: Enable full CRUD on content cards with drag-to-reorder
 
-**Priority 2: Vision OCR Workflow**
-- Job processor handlers for vision types (vision_ocr, vision_describe, etc.)
-- OCR result viewing UI (side-by-side image + transcription)
-- "Add OCR to Book" integration
-- Test with real handwritten notebook pages
+Tasks:
+1. Add content card action buttons in MarkdownEditor
+   - "Add from Message" (opens message selector, creates chunk, links to section)
+   - "Add from Transformation" (shows job results, links to section)
+   - "Add Manual Text" (creates chunk from inline input)
+2. Implement card editing (inline edit of chunk content, update notes)
+3. Implement card deletion (with confirmation, update sequence_numbers)
+4. Implement drag-to-reorder (react-beautiful-dnd or native, update sequence_number)
+5. Backend: PATCH /books/{id}/sections/{id}/content/{link_id} (update content/notes/sequence)
 
-**Priority 3: Book Builder Phase 3** (Configuration & Export)
-- TOML-assisted configuration UI
-- Export book to markdown file
-- Export book to LaTeX (using transformation system)
-- PDF generation pipeline integration
+Files to modify:
+- frontend/src/components/ContentCard.jsx (add edit/delete UI)
+- frontend/src/components/editors/MarkdownEditor.jsx (add action buttons, drag handlers)
+- backend/api/book_routes.py (add PATCH endpoint for content links)
 
-**Priority 4: Technical Debt** (CRITICAL)
-- **CRITICAL**: Split library_routes.py (1005 lines) - extract transformations routes
-- Consider splitting vision_routes.py (640 lines) - extract Apple Photos to separate file
-- Fix Alembic migration baseline (currently using create_all())
-- Resolve embedding dimension mismatch (1024 vs 1536)
+**Priority 2: Technical Debt - File Refactoring** ⚠️ CRITICAL
+**Objective**: Split large API route files before they become unmaintainable
+
+Files needing refactoring:
+- backend/api/library_routes.py (1057 lines) → extract to library_media_routes.py + library_collection_routes.py
+- backend/api/vision_routes.py (640 lines) → extract to vision_apple_photos_routes.py
+
+Target: 200-300 lines per file
+
+**Priority 3: Vision OCR Workflow**
+**Objective**: Complete vision system with background processing
+
+Tasks:
+1. Implement job processor handlers for vision types (vision_ocr, vision_describe, vision_analyze)
+2. Create OCR result viewer UI (side-by-side image + transcription)
+3. Add "Add OCR to Book" integration
+4. Test with real handwritten notebook pages
+
+**Priority 4: ImageBrowser → Book Integration**
+**Objective**: Enable adding images to book sections
+
+Tasks:
+1. Add "Add to Book" button in ImageBrowser metadata panel
+2. Implement image insertion into markdown (as ![alt](url))
+3. Create media content links (extend book_content_links to support media_id)
+4. Support inline image display in book preview
 
 **Priority 5: Deferred Features**
-- LaTeX typesetting engine
+- TOML-assisted configuration UI
+- LaTeX export from books
+- PDF generation pipeline
 - Cover image generator
 - Bibliography generator
 
 ---
 
-*Last Updated: Oct 6, 2025 - Book Viewer Production Ready + Image Recovery (1,019 files) + Resizable Panes*
+*Last Updated: Oct 6, 2025 - Book Builder Phase 1 Complete + Image System + Bug Fixes (Commit d727914)*
