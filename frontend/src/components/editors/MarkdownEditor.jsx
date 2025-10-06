@@ -180,7 +180,16 @@ export default function MarkdownEditor({
                     code: ({inline, children}) =>
                       inline
                         ? <code className="bg-gray-800 px-1.5 py-0.5 rounded text-sm text-blue-300">{children}</code>
-                        : <code className="block bg-gray-800 p-3 rounded border border-gray-700 text-sm">{children}</code>
+                        : <code className="block bg-gray-800 p-3 rounded border border-gray-700 text-sm">{children}</code>,
+                    img: ({node, src, alt, ...props}) => (
+                      <img
+                        src={src}
+                        alt={alt || 'Image'}
+                        className="max-w-full h-auto rounded-lg border border-gray-700 my-4"
+                        loading="lazy"
+                        {...props}
+                      />
+                    )
                   }}
                 >
                   {editorContent}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import PropTypes from 'prop-types';
+import { chunksToMarkdown } from '../../services/contentFormatter';
 
 /**
  * BookSectionSelector Modal
@@ -156,10 +157,7 @@ export default function BookSectionSelector({ message, chunks, onClose, onSucces
 
       // Optionally: Update section content with concatenated chunks
       if (chunks && chunks.length > 0) {
-        const content = chunks
-          .sort((a, b) => a.chunk_sequence - b.chunk_sequence)
-          .map(c => c.content)
-          .join('\n\n');
+        const content = chunksToMarkdown(chunks);
 
         await axios.patch(
           `${API_BASE}/api/books/${selectedBook.id}/sections/${section.id}`,
