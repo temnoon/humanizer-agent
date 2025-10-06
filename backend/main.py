@@ -20,6 +20,7 @@ from api.library_routes import router as library_router
 from api.gizmo_routes import router as gizmo_router
 from api.pipeline_routes import router as pipeline_router
 from api.book_routes import router as book_router
+from api.vision_routes import router as vision_router
 from database import init_db, close_db
 
 # Configure logging
@@ -83,6 +84,7 @@ app.include_router(library_router)
 app.include_router(gizmo_router)
 app.include_router(pipeline_router)
 app.include_router(book_router)
+app.include_router(vision_router)
 
 
 @app.get("/")
