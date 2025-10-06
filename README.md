@@ -1,122 +1,173 @@
 # Humanizer Agent
 
-**AI-Powered Narrative Transformation System**
+**Transform your conversational archives into publication-ready academic papers and technical documentation.**
 
-Built with Claude Agent SDK (Sonnet 4.5) for sophisticated narrative transformation using PERSONA, NAMESPACE, and STYLE parameters.
+## Overview
 
-## Project Overview
+Humanizer Agent is an AI-powered transformation pipeline that turns raw conversational data (ChatGPT, Claude exports) into structured, publication-quality books and papers. Built on Claude's Sonnet 4.5 with FastAPI + React, it combines philosophical analysis with practical writing tools.
 
-Humanizer Agent is a production-ready narrative transformation system that uses Anthropic's Claude Agent SDK to modify texts while preserving core meaning and intent. It combines proven transformation techniques with state-of-the-art AI infrastructure.
+## Core Philosophy
 
-## Features
+Language isn't objective reality—it's a **sense** through which consciousness constructs meaning. This framework helps you:
+- 🔄 **Transform narratives** across belief frameworks (PERSONA/NAMESPACE/STYLE)
+- 🧘 **Detect philosophical positions** using Madhyamaka (Middle Path) analysis
+- 👁️ **Generate multi-perspective analysis** from single viewpoints
+- 📚 **Build structured documents** from conversation archives
+- 🔗 **Preserve provenance** with full lineage tracking
 
-- **🎭 PERSONA Transformation**: Change the voice and perspective of narratives
-- **🌌 NAMESPACE Translation**: Shift conceptual frameworks and domains
-- **🎨 STYLE Modification**: Adjust tone, formality, and presentation
-- **💾 Memory Persistence**: Learn from previous transformations
-- **⏱️ Long-Running Tasks**: Handle documents up to 50,000 words
-- **📊 Checkpoint System**: Save progress and rollback if needed
-- **🔢 Smart Token Validation**: Real-time token counting and tier-based limits
-- **⚡ Frontend Validation**: Prevent oversized submissions before API calls
-- **📊 Visual Feedback**: Live progress bars and usage indicators
+## Key Features
 
-## Architecture
+### 🎭 Transformation Engine
+- **Persona**: Shift narrative voice (academic, conversational, technical)
+- **Namespace**: Reframe terminology (Buddhist → neuroscience, philosophy → engineering)
+- **Style**: Adjust tone and structure (formal papers, blog posts, documentation)
 
-### Backend (Python + FastAPI + Claude Agent SDK)
-- **Agent Core**: Transformation agent with memory and context management
-- **API Layer**: RESTful API for transformation requests
-- **File Management**: Document upload, processing, and download
-- **Session Management**: Track transformation history
+### 📖 Book Builder
+- **Hierarchical organization** (books → chapters → sections)
+- **Markdown editor** with live preview (CodeMirror + ReactMarkdown)
+- **Content linking** from transformation results or messages
+- **TOML-assisted configuration** for LaTeX export (coming soon)
 
-### Frontend (React + Vite)
-- **Simple Upload Interface**: Drag-and-drop document handling
-- **Configuration Modal**: PERSONA/NAMESPACE/STYLE parameters
-- **Real-time Progress**: Live updates with checkpoint visibility
-- **History Management**: Browse and compare transformations
-- **Token Counter**: Real-time word/token estimation with visual progress
-- **Smart Validation**: Prevents API calls when content exceeds limits
-- **Tier Management**: Supports free (4K), premium (32K), enterprise (100K) token limits
+### 🔍 Philosophical Analysis
+- **Madhyamaka detection**: Identify Middle Path reasoning patterns
+- **Perspective generation**: Synthesize multiple viewpoints
+- **Contemplative exercises**: Word dissolution, Socratic dialogue
+- **Archive analysis**: Map belief structures across conversations
+
+### 📊 Pipeline & Provenance
+- **Background job processing** for batch transformations
+- **Lineage tracking**: Every transformation links to its source
+- **Graph visualization** of content evolution (coming soon)
+- **Reapply transformations** to new content
+
+### 💾 Archive Import
+- **ChatGPT export** support (conversations.json)
+- **Claude export** support (with attachments)
+- **Image preservation**: DALL-E, uploads, Sediment screenshots
+- **Full metadata**: timestamps, models, tool calls
+
+## Tech Stack
+
+**Backend**:
+- Python 3.11 + FastAPI (async)
+- PostgreSQL + pgvector (semantic search)
+- SQLAlchemy (async ORM)
+- Anthropic Claude SDK (Sonnet 4.5)
+- sentence-transformers (embeddings)
+
+**Frontend**:
+- React 18 + Vite
+- TailwindCSS + DaisyUI
+- CodeMirror (markdown editing)
+- axios (API client)
+
+**Infrastructure**:
+- Alembic (migrations)
+- Poetry (Python dependencies)
+- Background job processor
+
+## Architecture Principles
+
+1. **Local-first**: Your data stays on your machine
+2. **Extend, don't rewrite**: Learn from DEC's Jupiter lesson—nurture working systems
+3. **Provenance over everything**: Every byte traceable to its source
+4. **Modular refactoring**: Target 200-300 lines per file, split at 500+ lines
+
+## Current Status (Oct 2025)
+
+### ✅ Completed
+- Transformation engine (PERSONA/NAMESPACE/STYLE)
+- PostgreSQL + pgvector embeddings
+- ChatGPT/Claude archive import (8,640 media records)
+- Madhyamaka service (refactored, tested, 89% pass rate)
+- Transformation pipeline backend + frontend UI
+- Transformations library (browse, filter, reapply)
+- **Book Builder Phase 1 & 2** (foundation + markdown editor)
+
+### 🚧 In Progress
+- Manual UI testing of Book Builder
+- Phase 3: Configuration & Export (TOML UI, LaTeX, PDF)
+
+### 📋 Roadmap
+- LaTeX typesetting engine
+- PDF compositor
+- Cover image generator
+- Bibliography generator
+- Cloudflare Workers deployment (future)
 
 ## Quick Start
 
-### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- Anthropic API key
+```bash
+# Clone repository
+git clone <repo-url>
+cd humanizer-agent
 
-### Backend Setup
+# Start both servers (backend + frontend)
+./start.sh
+
+# Access the app
+open http://localhost:5173
+```
+
+**Servers**:
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+## Database Setup
 
 ```bash
+# Install PostgreSQL
+brew install postgresql
+
+# Create database
+createdb humanizer
+
+# Run migrations
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Set API key
-export ANTHROPIC_API_KEY="your-api-key-here"
-
-# Run server
-python main.py
+alembic upgrade head
 ```
 
-### Frontend Setup
+## Use Cases
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+1. **Academic Writing**: Transform ChatGPT research conversations into structured papers
+2. **Technical Documentation**: Convert Q&A sessions into organized docs
+3. **Multi-perspective Analysis**: Generate diverse viewpoints from single narratives
+4. **Archive Mining**: Extract insights from thousands of historical conversations
+5. **Belief Mapping**: Visualize philosophical patterns across your writing
 
-## Usage
+## Philosophy in Practice
 
-1. **Upload Document**: Drop a text file or paste content
-2. **Monitor Token Usage**: Real-time counter shows word/token count and tier usage
-3. **Configure Transformation**: Set PERSONA, NAMESPACE, STYLE
-4. **Validate Content**: System prevents submission if content exceeds token limits
-5. **Start Processing**: Agent begins transformation with checkpoints
-6. **Review Results**: Compare original and transformed text
-7. **Download**: Export transformed document
+This isn't just a tool—it's a **contemplative practice**:
 
-### Token Limits by Tier
-- **Free**: 4,000 tokens (~3,000 words)
-- **Premium**: 32,000 tokens (~24,000 words) 
-- **Enterprise**: 100,000 tokens (~75,000 words)
+> "Language is not objective reality. It's a sense—like sight or sound—through which consciousness constructs meaning. The Humanizer Agent helps you shift from linguistic identification to self-awareness."
 
-## API Endpoints
+By transforming the *same content* through different frameworks, you directly experience the **constructed nature of meaning**. Buddhist → neuroscience → engineering. Same insights, different languages. All valid. All constructed.
 
-- `POST /api/transform` - Start new transformation
-- `GET /api/transform/{id}` - Get transformation status
-- `GET /api/transform/{id}/result` - Download result
-- `GET /api/history` - List transformation history
-- `POST /api/checkpoint/{id}` - Create checkpoint
-- `POST /api/rollback/{id}` - Rollback to checkpoint
+## Documentation
 
-## Development Status
+- `CLAUDE.md` - Developer guide with activation checklist
+- `BOOK_BUILDER_TESTING_GUIDE.md` - Phase 1 & 2 testing instructions
+- `BOOK_BUILDER_BUGS_FIXED.md` - Bug documentation and fixes
+- `docs/` - Architecture, design principles, roadmap
+- `backend/tests/` - Comprehensive test suite
 
-**Current Phase**: MVP Development
-- [x] Project structure created
-- [x] Core token utilities and validation
-- [x] Frontend token estimation and validation
-- [x] Real-time user feedback and limits
-- [x] API error handling improvements
-- [ ] Core agent implementation
-- [ ] Complete API endpoints
-- [ ] Testing suite
-- [ ] Documentation
+## Contributing
 
-## Technology Stack
-
-- **Agent Framework**: Claude Agent SDK (Sonnet 4.5)
-- **Backend**: FastAPI, Python 3.11
-- **Frontend**: React, Vite, TailwindCSS
-- **API**: Anthropic Claude API
-- **Storage**: SQLite (development), PostgreSQL (production)
+This is a personal research project exploring the intersection of AI, philosophy, and writing tools. Contributions welcome, but expect philosophical discussions about **why** we build, not just **what** we build.
 
 ## License
 
-MIT
+[Your chosen license]
 
 ## Credits
 
-Built with Claude Agent SDK by Anthropic.
-Inspired by the Lamish Projection Engine (LPE) framework.
+Built with Claude Sonnet 4.5, inspired by:
+- **Nagarjuna's Madhyamaka** (Middle Path philosophy)
+- **DEC's Jupiter** (extend working systems, don't rewrite)
+- **Joplin's notebook structure** (hierarchical organization)
+- **Sediment** (conversation archaeology)
+
+---
+
+**"The map is not the territory. The menu is not the meal. Language is not reality—it's just how we taste it."**
