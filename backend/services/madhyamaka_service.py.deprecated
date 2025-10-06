@@ -1,0 +1,1003 @@
+"""
+Madhyamaka Service - Middle Path Detection & Transformation
+
+This service implements Nagarjuna's Madhyamaka philosophy to:
+1. Detect eternalism (reification) and nihilism in language
+2. Transform language toward the middle path
+3. Generate contemplative practices for direct realization
+4. Track progress toward non-dual understanding
+
+Core Principles:
+- Śūnyatā (Emptiness): Language has no inherent meaning
+- Two Truths: Conventional (words work) & Ultimate (words are empty)
+- Tetralemma: Reject all four extreme positions
+- Dependent Origination: Meaning emerges from conditions
+"""
+
+from typing import List, Dict, Any, Optional, Tuple
+import re
+import numpy as np
+from datetime import datetime
+from enum import Enum
+
+
+class ExtremeType(Enum):
+    """Types of extreme views"""
+    ETERNALISM = "eternalism"  # Reification, inherent existence
+    NIHILISM = "nihilism"  # Denial of conventional function
+    MIDDLE_PATH = "middle_path"  # Neither extreme
+    CLINGING = "clinging"  # Attachment to views
+
+
+class MadhyamakaDetector:
+    """
+    Detects eternalism, nihilism, and middle path proximity in text.
+
+    Uses linguistic heuristics, semantic patterns, and embedding analysis.
+    """
+
+    # Linguistic markers for eternalism (reification)
+    ETERNALISM_MARKERS = {
+        "absolute_language": [
+            r'\b(always|never|must|essential|fundamental|absolute|inherent|true|truth)\b',
+            r'\b(has to|need to|required|necessary|inevitable)\b'
+        ],
+        "essentialist_claims": [
+            r'\b(\w+)\s+is\s+(\w+)',  # "X is Y" without qualifiers
+            r'\b(the|a)\s+(\w+)\s+of\s+(\w+)',  # "the X of Y"
+        ],
+        "universal_quantifiers": [
+            r'\b(all|every|everyone|everything|nothing|no one|nobody)\b',
+            r'\b(any|whatever|whenever|wherever)\b'
+        ],
+        "lack_of_conditionality": [
+            # Absence of these indicates absolutism
+            r'\b(if|when|depending|sometimes|often|might|could|may)\b'
+        ]
+    }
+
+    # Linguistic markers for nihilism (negation of conventional)
+    NIHILISM_MARKERS = {
+        "absolute_negation": [
+            r'\b(completely|totally|entirely|absolutely)\s+(meaningless|false|illusion|unreal)\b',
+            r'\b(nothing|none)\s+(matters|exists|is real)\b'
+        ],
+        "denial_of_function": [
+            r'\b(doesn\'t|does not|can\'t|cannot)\s+(work|function|mean anything)\b',
+            r'\b(all|everything)\s+is\s+(false|illusion|meaningless|empty)\b'
+        ],
+        "extreme_relativism": [
+            r'\b(all views|all beliefs|everything)\s+are\s+(equally|the same)\b',
+            r'\b(no|there is no)\s+(truth|meaning|reality)\b'
+        ]
+    }
+
+    # Markers for middle path understanding
+    MIDDLE_PATH_MARKERS = {
+        "metacognitive_awareness": [
+            r'\b(I notice|I observe|it seems|it appears|I\'m aware)\b',
+            r'\b(the label|the concept|the word|the idea)\b',
+            r'\b(constructed|construct|apply|project)\b'
+        ],
+        "conditional_language": [
+            r'\b(for some|in certain contexts|depending on|when|if)\b',
+            r'\b(sometimes|often|can be|might be|could be)\b',
+            r'\b(in my experience|from my perspective|it seems to me)\b'
+        ],
+        "two_truths_awareness": [
+            r'\b(conventionally|ultimately|at one level|at another level)\b',
+            r'\b(functions as|useful for|serves to)\b.*\b(but|while|yet)\b.*\b(empty|constructed|dependent)\b'
+        ],
+        "dependent_origination": [
+            r'\b(arises? from|depends on|conditional|co-arises?|emerges? from)\b',
+            r'\b(given|based on|in relation to|relative to)\b'
+        ]
+    }
+
+    def __init__(self):
+        """Initialize detector with compiled regex patterns"""
+        self.eternalism_patterns = self._compile_patterns(self.ETERNALISM_MARKERS)
+        self.nihilism_patterns = self._compile_patterns(self.NIHILISM_MARKERS)
+        self.middle_path_patterns = self._compile_patterns(self.MIDDLE_PATH_MARKERS)
+
+    def _compile_patterns(self, markers: Dict[str, List[str]]) -> Dict[str, List[re.Pattern]]:
+        """Compile regex patterns for efficient matching"""
+        compiled = {}
+        for category, patterns in markers.items():
+            compiled[category] = [re.compile(p, re.IGNORECASE) for p in patterns]
+        return compiled
+
+    def detect_eternalism(self, text: str) -> Dict[str, Any]:
+        """
+        Detect reification and absolutist language.
+
+        Returns:
+            {
+                "eternalism_detected": bool,
+                "confidence": float (0-1),
+                "indicators": List[Dict],
+                "reified_concepts": List[str],
+                "severity": str (low, medium, high, critical)
+            }
+        """
+        indicators = []
+        total_score = 0.0
+        reified_concepts = set()
+
+        # Check absolute language
+        for pattern in self.eternalism_patterns["absolute_language"]:
+            matches = pattern.findall(text)
+            if matches:
+                indicators.append({
+                    "type": "absolute_language",
+                    "phrases": list(set(matches)),
+                    "severity": "high"
+                })
+                total_score += 0.3 * len(matches)
+
+        # Check essentialist claims ("X is Y" without qualification)
+        for pattern in self.eternalism_patterns["essentialist_claims"]:
+            matches = pattern.findall(text)
+            if matches:
+                # Check if any conditionality markers are nearby
+                has_qualification = any(
+                    cond_pattern.search(text)
+                    for cond_pattern in self.eternalism_patterns["lack_of_conditionality"]
+                )
+
+                if not has_qualification:
+                    indicators.append({
+                        "type": "essentialist_claims",
+                        "examples": [' '.join(m) if isinstance(m, tuple) else m for m in matches[:3]],
+                        "severity": "medium"
+                    })
+                    total_score += 0.2 * len(matches)
+
+                    # Extract reified concepts
+                    for match in matches:
+                        if isinstance(match, tuple):
+                            reified_concepts.update([m for m in match if m and len(m) > 2])
+
+        # Check universal quantifiers
+        for pattern in self.eternalism_patterns["universal_quantifiers"]:
+            matches = pattern.findall(text)
+            if matches:
+                indicators.append({
+                    "type": "universal_quantifiers",
+                    "phrases": list(set(matches)),
+                    "severity": "medium"
+                })
+                total_score += 0.15 * len(matches)
+
+        # Check for lack of conditionality (absence of "if", "when", etc.)
+        conditional_count = sum(
+            len(pattern.findall(text))
+            for pattern in self.eternalism_patterns["lack_of_conditionality"]
+        )
+
+        # If text is long but has few conditional markers, increase eternalism score
+        words = len(text.split())
+        if words > 20 and conditional_count < 2:
+            indicators.append({
+                "type": "lack_of_conditionality",
+                "explanation": "No acknowledgment of dependent arising or conditional nature",
+                "severity": "medium"
+            })
+            total_score += 0.25
+
+        # Calculate confidence (normalize to 0-1 range)
+        confidence = min(total_score / 2.0, 1.0)
+
+        # Determine severity
+        if confidence < 0.3:
+            severity = "low"
+        elif confidence < 0.6:
+            severity = "medium"
+        elif confidence < 0.85:
+            severity = "high"
+        else:
+            severity = "critical"
+
+        return {
+            "eternalism_detected": confidence > 0.5,
+            "confidence": confidence,
+            "indicators": indicators,
+            "reified_concepts": sorted(list(reified_concepts)),
+            "severity": severity,
+            "score_breakdown": {
+                "absolute_language": sum(1 for i in indicators if i["type"] == "absolute_language"),
+                "essentialist_claims": sum(1 for i in indicators if i["type"] == "essentialist_claims"),
+                "universal_quantifiers": sum(1 for i in indicators if i["type"] == "universal_quantifiers"),
+                "lack_conditionality": sum(1 for i in indicators if i["type"] == "lack_of_conditionality")
+            }
+        }
+
+    def detect_nihilism(self, text: str) -> Dict[str, Any]:
+        """
+        Detect denial of conventional truth or misunderstanding of emptiness.
+
+        Returns similar structure to detect_eternalism
+        """
+        indicators = []
+        total_score = 0.0
+
+        # Check absolute negation
+        for pattern in self.nihilism_patterns["absolute_negation"]:
+            matches = pattern.findall(text)
+            if matches:
+                indicators.append({
+                    "type": "absolute_negation",
+                    "phrases": list(set(matches)),
+                    "severity": "high"
+                })
+                total_score += 0.4 * len(matches)
+
+        # Check denial of function
+        for pattern in self.nihilism_patterns["denial_of_function"]:
+            matches = pattern.findall(text)
+            if matches:
+                indicators.append({
+                    "type": "denial_of_conventional_function",
+                    "explanation": "Rejects that language accomplishes conventional purposes",
+                    "severity": "high"
+                })
+                total_score += 0.35 * len(matches)
+
+        # Check extreme relativism
+        for pattern in self.nihilism_patterns["extreme_relativism"]:
+            matches = pattern.findall(text)
+            if matches:
+                indicators.append({
+                    "type": "extreme_relativism",
+                    "phrases": list(set(matches)),
+                    "severity": "medium"
+                })
+                total_score += 0.25 * len(matches)
+
+        # Check for "emptiness as nothingness" confusion
+        emptiness_words = re.findall(r'\b(empty|emptiness|void|nothingness|meaningless)\b', text, re.IGNORECASE)
+        conventional_words = re.findall(r'\b(works|functions|useful|effective|pragmatic)\b', text, re.IGNORECASE)
+
+        if len(emptiness_words) >= 2 and len(conventional_words) == 0:
+            indicators.append({
+                "type": "emptiness_as_nothingness",
+                "explanation": "Misunderstands śūnyatā as mere negation without acknowledging conventional function",
+                "severity": "critical"
+            })
+            total_score += 0.5
+
+        # Calculate confidence
+        confidence = min(total_score / 1.5, 1.0)
+
+        # Determine severity
+        if confidence < 0.3:
+            severity = "low"
+        elif confidence < 0.6:
+            severity = "medium"
+        elif confidence < 0.85:
+            severity = "high"
+        else:
+            severity = "critical"
+
+        return {
+            "nihilism_detected": confidence > 0.5,
+            "confidence": confidence,
+            "indicators": indicators,
+            "severity": severity,
+            "warning": {
+                "level": severity,
+                "message": "User may be experiencing nihilistic insight. Offer grounding in conventional functionality." if confidence > 0.7 else None
+            } if confidence > 0.7 else None
+        }
+
+    def detect_middle_path_proximity(self, text: str) -> Dict[str, Any]:
+        """
+        Measure how close text is to middle path understanding.
+
+        Returns score (0-1) and analysis of positive indicators.
+        """
+        positive_indicators = []
+        total_score = 0.0
+
+        # Check metacognitive awareness
+        metacog_matches = []
+        for pattern in self.middle_path_patterns["metacognitive_awareness"]:
+            matches = pattern.findall(text)
+            if matches:
+                metacog_matches.extend(matches)
+
+        if metacog_matches:
+            positive_indicators.append({
+                "type": "metacognitive_awareness",
+                "evidence": metacog_matches[:3],
+                "score": min(0.25 * len(metacog_matches), 0.95)
+            })
+            total_score += min(0.25 * len(metacog_matches), 0.95)
+
+        # Check conditional language
+        conditional_matches = []
+        for pattern in self.middle_path_patterns["conditional_language"]:
+            matches = pattern.findall(text)
+            if matches:
+                conditional_matches.extend(matches)
+
+        if conditional_matches:
+            positive_indicators.append({
+                "type": "conditional_language",
+                "evidence": conditional_matches[:3],
+                "score": min(0.2 * len(conditional_matches), 0.85)
+            })
+            total_score += min(0.2 * len(conditional_matches), 0.85)
+
+        # Check two truths awareness
+        for pattern in self.middle_path_patterns["two_truths_awareness"]:
+            if pattern.search(text):
+                positive_indicators.append({
+                    "type": "two_truths_awareness",
+                    "evidence": "Uses both conventional and ultimate perspectives",
+                    "score": 0.92
+                })
+                total_score += 0.92
+                break
+
+        # Check dependent origination awareness
+        dep_orig_matches = []
+        for pattern in self.middle_path_patterns["dependent_origination"]:
+            matches = pattern.findall(text)
+            if matches:
+                dep_orig_matches.extend(matches)
+
+        if dep_orig_matches:
+            positive_indicators.append({
+                "type": "dependent_origination_awareness",
+                "evidence": dep_orig_matches[:3],
+                "score": min(0.3 * len(dep_orig_matches), 0.9)
+            })
+            total_score += min(0.3 * len(dep_orig_matches), 0.9)
+
+        # Normalize score (accounting for possible overlap)
+        middle_path_score = min(total_score / 2.5, 1.0)
+
+        # Determine proximity level
+        if middle_path_score < 0.3:
+            proximity = "far"
+        elif middle_path_score < 0.6:
+            proximity = "approaching"
+        elif middle_path_score < 0.85:
+            proximity = "close"
+        else:
+            proximity = "very_close"
+
+        return {
+            "middle_path_score": middle_path_score,
+            "proximity": proximity,
+            "indicators": {
+                "positive": positive_indicators,
+                "areas_for_refinement": self._suggest_refinements(text, middle_path_score)
+            }
+        }
+
+    def _suggest_refinements(self, text: str, current_score: float) -> List[Dict[str, Any]]:
+        """Suggest areas for deepening middle path understanding"""
+        suggestions = []
+
+        # Check for subtle self-reification
+        self_pronouns = len(re.findall(r'\b(I|me|my|mine|myself)\b', text, re.IGNORECASE))
+        if self_pronouns > 5 and current_score < 0.9:
+            suggestions.append({
+                "type": "subtle_self_reification",
+                "evidence": f"Frequent use of 'I' without questioning subject-object duality ({self_pronouns} instances)",
+                "suggestion": "Explore: Who is the 'I' that notices? Is that also constructed?"
+            })
+
+        # Check for clinging to emptiness itself
+        emptiness_refs = re.findall(r'\b(empty|emptiness|śūnyatā)\b', text, re.IGNORECASE)
+        if len(emptiness_refs) >= 3:
+            suggestions.append({
+                "type": "potential_clinging_to_emptiness",
+                "evidence": "Multiple references to emptiness",
+                "suggestion": "Remember: Even emptiness is empty. Don't reify the teaching."
+            })
+
+        return suggestions
+
+    def detect_clinging(self, conversation_history: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Detect attachment to views, even 'correct' ones.
+
+        Analyzes conversation patterns for defensive assertion, repetition,
+        spiritual superiority, etc.
+        """
+        if not conversation_history:
+            return {"clinging_detected": False, "confidence": 0.0}
+
+        patterns = []
+        total_score = 0.0
+
+        # Extract all user messages
+        user_messages = [msg["content"] for msg in conversation_history if msg.get("role") == "user"]
+
+        if len(user_messages) < 2:
+            return {"clinging_detected": False, "confidence": 0.0, "note": "Insufficient history"}
+
+        # Check for defensive assertion (exclamation marks, all caps, repeated emphasis)
+        defensive_indicators = 0
+        for msg in user_messages:
+            exclamations = msg.count('!')
+            all_caps_words = len(re.findall(r'\b[A-Z]{3,}\b', msg))
+
+            if exclamations >= 2 or all_caps_words >= 1:
+                defensive_indicators += 1
+
+        if defensive_indicators >= 2:
+            patterns.append({
+                "type": "defensive_assertion",
+                "evidence": "Repeated emphasis with exclamation marks or all caps",
+                "psychological_indicator": "Protecting view from challenge"
+            })
+            total_score += 0.3
+
+        # Check for repetition of same concepts
+        # Count unique words vs total words as rough measure
+        all_words = ' '.join(user_messages).lower().split()
+        unique_words = set(all_words)
+        repetition_ratio = len(all_words) / max(len(unique_words), 1)
+
+        if repetition_ratio > 3.0:  # High repetition
+            patterns.append({
+                "type": "repetitive_assertion",
+                "evidence": f"Repetition ratio: {repetition_ratio:.1f}",
+                "psychological_indicator": "Clinging to particular concepts"
+            })
+            total_score += 0.25
+
+        # Check for spiritual superiority language
+        superiority_phrases = [
+            r'\b(most people|others|they)\s+(don\'t|can\'t|cannot|won\'t)\s+(understand|grasp|see|get it)\b',
+            r'\b(I|we)\s+(understand|know|see|realize)\s+what\s+(most|others|they)\s+(don\'t|can\'t)\b',
+            r'\b(only|few|rare)\s+(people|ones)\s+(understand|know|see)\b'
+        ]
+
+        superiority_count = sum(
+            len(re.findall(pattern, ' '.join(user_messages), re.IGNORECASE))
+            for pattern in superiority_phrases
+        )
+
+        if superiority_count >= 1:
+            patterns.append({
+                "type": "spiritual_superiority",
+                "evidence": "Language suggesting special understanding unavailable to others",
+                "psychological_indicator": "Using emptiness to establish identity/status"
+            })
+            total_score += 0.35
+
+        confidence = min(total_score, 1.0)
+
+        return {
+            "clinging_detected": confidence > 0.4,
+            "clinging_type": "attachment_to_views",
+            "confidence": confidence,
+            "patterns": patterns
+        }
+
+
+class MadhyamakaTransformer:
+    """
+    Transforms language toward the middle path.
+
+    Applies tetralemma, reveals dependent origination, generates alternatives.
+    """
+
+    def __init__(self):
+        self.detector = MadhyamakaDetector()
+
+    def generate_middle_path_alternatives(
+        self,
+        text: str,
+        num_alternatives: int = 5,
+        user_stage: int = 1
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate alternative phrasings that avoid extremes.
+
+        Args:
+            text: Original text
+            num_alternatives: Number of alternatives to generate
+            user_stage: User journey stage (1-5) for appropriate depth
+
+        Returns:
+            List of alternative phrasings with scores and explanations
+        """
+        alternatives = []
+
+        # Detect what kind of extreme we're dealing with
+        eternalism_result = self.detector.detect_eternalism(text)
+        nihilism_result = self.detector.detect_nihilism(text)
+
+        # Generate alternatives based on detected issues
+        if eternalism_result["eternalism_detected"]:
+            alternatives.extend(
+                self._generate_anti_eternalism_alternatives(
+                    text,
+                    eternalism_result["reified_concepts"],
+                    user_stage
+                )
+            )
+
+        if nihilism_result["nihilism_detected"]:
+            alternatives.extend(
+                self._generate_anti_nihilism_alternatives(text, user_stage)
+            )
+
+        # Always add some general middle path alternatives
+        alternatives.extend(
+            self._generate_general_middle_path_alternatives(text, user_stage)
+        )
+
+        # Sort by score and return top N
+        alternatives.sort(key=lambda x: x.get("score", 0), reverse=True)
+        return alternatives[:num_alternatives]
+
+    def _generate_anti_eternalism_alternatives(
+        self,
+        text: str,
+        reified_concepts: List[str],
+        user_stage: int
+    ) -> List[Dict[str, Any]]:
+        """Generate alternatives that soften absolutist claims"""
+        alternatives = []
+
+        # Strategy 1: Add conditionality
+        conditional_text = self._add_conditionality(text)
+        if conditional_text != text:
+            alternatives.append({
+                "text": conditional_text,
+                "madhyamaka_improvements": [
+                    "Acknowledges conditionality",
+                    "Avoids absolutism",
+                    "Recognizes variability"
+                ],
+                "score": 0.88,
+                "preserves_conventional_meaning": True,
+                "type": "conditional_softening"
+            })
+
+        # Strategy 2: Frame as construction
+        if user_stage >= 2:
+            construction_text = self._frame_as_construction(text, reified_concepts)
+            if construction_text:
+                alternatives.append({
+                    "text": construction_text,
+                    "madhyamaka_improvements": [
+                        "Foregrounds construction",
+                        "Removes reification",
+                        "Meta-cognitive awareness"
+                    ],
+                    "score": 0.94,
+                    "preserves_conventional_meaning": True,
+                    "type": "construction_framing"
+                })
+
+        # Strategy 3: Transform to inquiry (for advanced users)
+        if user_stage >= 4:
+            inquiry_text = self._transform_to_inquiry(text)
+            if inquiry_text:
+                alternatives.append({
+                    "text": inquiry_text,
+                    "madhyamaka_improvements": [
+                        "Shifts to metacognitive inquiry",
+                        "Avoids making counter-claim",
+                        "Encourages direct investigation"
+                    ],
+                    "score": 0.96,
+                    "type": "contemplative_pointer",
+                    "preserves_conventional_meaning": False,
+                    "note": "Transforms assertion into inquiry"
+                })
+
+        return alternatives
+
+    def _add_conditionality(self, text: str) -> str:
+        """Add conditional qualifiers to absolutist statements"""
+        # Replace "is" with "can be" or "is often"
+        text = re.sub(r'\b(is)\b', r'can be', text, count=1)
+
+        # Add "for some people" if making universal claim
+        if re.search(r'\b(everyone|all|people|we)\b', text, re.IGNORECASE):
+            text = "For some people, " + text[0].lower() + text[1:]
+
+        # Replace "must" with "might benefit from"
+        text = re.sub(r'\bmust\b', 'might benefit from', text, flags=re.IGNORECASE)
+
+        # Replace "never" with "rarely" or "seldom"
+        text = re.sub(r'\bnever\b', 'rarely', text, flags=re.IGNORECASE)
+
+        # Replace "always" with "often"
+        text = re.sub(r'\balways\b', 'often', text, flags=re.IGNORECASE)
+
+        return text
+
+    def _frame_as_construction(self, text: str, reified_concepts: List[str]) -> Optional[str]:
+        """Reframe statement to foreground construction process"""
+        if not reified_concepts:
+            return None
+
+        # Take first reified concept and reframe around it
+        concept = reified_concepts[0] if reified_concepts else "this concept"
+
+        return f"The concept '{concept}' in this context suggests that {text.lower()} - though this framing depends on how we've learned to construct meaning."
+
+    def _transform_to_inquiry(self, text: str) -> Optional[str]:
+        """Transform assertion into contemplative inquiry"""
+        # Convert statement to question
+        if "is" in text.lower():
+            return f"Notice: Does the thought '{text}' arise from direct experience or learned belief? What happens if you question it?"
+        else:
+            return f"What if you investigate: '{text}' - is this arising from conditioned patterns or present-moment awareness?"
+
+    def _generate_anti_nihilism_alternatives(
+        self,
+        text: str,
+        user_stage: int
+    ) -> List[Dict[str, Any]]:
+        """Generate alternatives that restore conventional functionality"""
+        alternatives = []
+
+        # Strategy: Add two truths framework
+        two_truths_text = f"Conventionally, language functions to communicate. Ultimately, {text.lower()} This doesn't mean words are useless - it means they're empty of fixed meaning while serving their purpose."
+
+        alternatives.append({
+            "text": two_truths_text,
+            "madhyamaka_improvements": [
+                "Explicitly invokes two truths",
+                "Validates conventional",
+                "Points to ultimate without nihilism"
+            ],
+            "score": 0.92,
+            "type": "two_truths_framework",
+            "teaching_depth": "intermediate"
+        })
+
+        return alternatives
+
+    def _generate_general_middle_path_alternatives(
+        self,
+        text: str,
+        user_stage: int
+    ) -> List[Dict[str, Any]]:
+        """Generate general middle path versions regardless of extreme detected"""
+        alternatives = []
+
+        # For all users: Simple conditional version
+        simple = self._add_conditionality(text)
+        if simple != text:
+            alternatives.append({
+                "text": simple,
+                "madhyamaka_improvements": ["Adds nuance", "Avoids extremes"],
+                "score": 0.75,
+                "preserves_conventional_meaning": True,
+                "type": "simple_softening"
+            })
+
+        return alternatives
+
+
+# Nagarjuna's teachings database
+NAGARJUNA_TEACHINGS = {
+    "emptiness_not_nihilism": {
+        "quote": "Those who do not discern the distinction between the two truths cannot discern the profound truth of the Buddha's teaching.",
+        "source": "Mūlamadhyamakakārikā XXIV.9",
+        "context": "nihilism_detected",
+        "explanation": "Emptiness doesn't mean nothingness. Things function conventionally while being empty of inherent existence."
+    },
+    "clinging_to_emptiness": {
+        "quote": "Victorious ones have said emptiness is the relinquishing of all views. Those who are possessed of the view of emptiness are said to be incorrigible.",
+        "source": "Mūlamadhyamakakārikā XIII.8",
+        "context": "clinging_to_views",
+        "explanation": "Even the view of emptiness must not be clung to. It is medicine, not a new possession."
+    },
+    "dependent_origination": {
+        "quote": "We state that whatever is dependent arising, that is emptiness. That is dependent upon convention. That itself is the middle path.",
+        "source": "Mūlamadhyamakakārikā XXIV.18",
+        "context": "general",
+        "explanation": "Emptiness = Dependent origination = The middle path. They are three ways of pointing to the same truth."
+    }
+}
+
+
+class ContemplativePracticeGenerator:
+    """
+    Generates contemplative practices for direct realization of middle path.
+
+    Practices include:
+    - Neti Neti (systematic negation)
+    - Two Truths contemplation
+    - Dependent Origination inquiry
+    """
+
+    def generate_neti_neti(
+        self,
+        target_concept: str = "self",
+        user_stage: int = 3,
+        depth: str = "progressive"
+    ) -> Dict[str, Any]:
+        """
+        Generate Neti Neti (not this, not that) practice for systematic negation.
+
+        Args:
+            target_concept: Concept to investigate (self, consciousness, thought, etc.)
+            user_stage: User journey stage (determines depth)
+            depth: "simple", "progressive", or "deep"
+
+        Returns:
+            Complete practice instructions with stages
+        """
+        practices = {
+            "self": self._neti_neti_self(),
+            "thought": self._neti_neti_thought(),
+            "emotion": self._neti_neti_emotion(),
+            "consciousness": self._neti_neti_consciousness()
+        }
+
+        practice_data = practices.get(target_concept, self._neti_neti_self())
+
+        return {
+            "practice_type": "neti_neti",
+            "target": target_concept,
+            "instructions": practice_data,
+            "metadata": {
+                "duration_minutes": 15 if depth == "simple" else 20 if depth == "progressive" else 30,
+                "difficulty": "beginner" if user_stage <= 2 else "intermediate" if user_stage <= 4 else "advanced",
+                "warning": "If this practice creates anxiety or dissociation, return to conventional reality. Ground in the body, name objects in the room. The goal is liberating insight, not destabilization."
+            }
+        }
+
+    def _neti_neti_self(self) -> Dict[str, Any]:
+        """Neti Neti practice for investigating the self"""
+        return {
+            "overview": "This practice systematically investigates what we call 'self' through progressive negation. Each negation is not mere denial but inquiry into emptiness.",
+
+            "stages": [
+                {
+                    "stage": 1,
+                    "investigation": "Is the self the body?",
+                    "contemplation": "Notice the body: arms, legs, torso, head. Are you the body, or does the body appear in awareness? The body changes constantly - cells die and regenerate. Which body is the 'self'? The body of childhood? Of now? Of old age?",
+                    "negation": "Not this (neti) - the self is not reducible to the body",
+                    "not_nihilism": "This doesn't mean the body doesn't exist conventionally. It means 'self' is not inherently identical with body.",
+                    "pause_instruction": "Rest here for 3 breaths. Notice what's observing the body."
+                },
+                {
+                    "stage": 2,
+                    "investigation": "Is the self thoughts?",
+                    "contemplation": "Watch thoughts arise and pass. Thoughts come and go, but who is watching? Are you identical with thoughts, or do thoughts appear to you? Which thought is the self? The thought from 5 minutes ago? The current thought? The next thought?",
+                    "negation": "Not this (neti) - the self is not reducible to thoughts",
+                    "not_nihilism": "Thoughts function conventionally. Thinking happens. But 'self' is not inherently found in thoughts.",
+                    "pause_instruction": "Rest here for 3 breaths. Notice the space between thoughts."
+                },
+                {
+                    "stage": 3,
+                    "investigation": "Is the self awareness itself?",
+                    "contemplation": "Perhaps the self is the awareness witnessing body and thoughts? But notice: even this 'awareness' is a concept. Who is aware of awareness? Where does awareness begin and end? Is it a thing, or another constructed category?",
+                    "negation": "Not this (neti) - even awareness as 'self' is a reification",
+                    "not_nihilism": "Awareness occurs conventionally. Experience happens. But treating awareness as an independent, inherent self is still reification.",
+                    "pause_instruction": "Rest here for 5 breaths. Let the question hang without answering."
+                },
+                {
+                    "stage": 4,
+                    "investigation": "Is there a self at all?",
+                    "contemplation": "After negating body, thoughts, and awareness - is there anything left to call 'self'? Notice: you're still here, experiencing this moment. So what is this 'you'? Not the body, not thoughts, not even awareness as a thing. What remains?",
+                    "negation": "Not this (neti), not that (neti)",
+                    "middle_path_realization": "The self is neither inherently existing nor non-existing. It arises dependently, conventionally, without essence. You function as 'you' while being empty of inherent selfhood.",
+                    "pause_instruction": "Rest in this recognition for 10 breaths."
+                }
+            ],
+
+            "closing": {
+                "integration": "As you return to daily life, notice how 'you' function perfectly well without an inherent self. Choices are made, actions happen, relationships form - all without a fixed, independent self at the center. This is the middle path: neither affirming nor denying the self.",
+                "koan": "Who is it that realizes there is no self?"
+            }
+        }
+
+    def _neti_neti_thought(self) -> Dict[str, Any]:
+        """Neti Neti for investigating thoughts"""
+        return {
+            "overview": "Investigate the nature of thoughts through systematic inquiry.",
+            "stages": [
+                {
+                    "stage": 1,
+                    "investigation": "Where do thoughts come from?",
+                    "contemplation": "Watch for the next thought to arise. Can you catch it at the moment of arising? Where was it before it appeared? Notice: thoughts seem to come from nowhere, appear briefly, and dissolve back into nowhere.",
+                    "negation": "Thoughts have no findable origin",
+                    "pause_instruction": "Rest here for 3 breaths."
+                },
+                {
+                    "stage": 2,
+                    "investigation": "What are thoughts made of?",
+                    "contemplation": "Are thoughts physical? Mental? Energy? Words? Images? Try to locate the substance of a thought. Notice: thoughts are not solid things - they're fleeting events in awareness.",
+                    "negation": "Thoughts have no intrinsic substance",
+                    "pause_instruction": "Rest here for 3 breaths."
+                },
+                {
+                    "stage": 3,
+                    "investigation": "Who owns thoughts?",
+                    "contemplation": "Do thoughts belong to you? Can you control which thoughts arise? Notice: thoughts appear unbidden. You can't choose to not think for the next 10 seconds. They arise from conditions, not from a controller.",
+                    "negation": "Thoughts belong to no one",
+                    "middle_path_realization": "Thoughts arise dependently, function conventionally, and are empty of inherent existence. They're neither 'yours' nor 'not yours' - they're just arising and passing.",
+                    "pause_instruction": "Rest here for 5 breaths."
+                }
+            ],
+            "closing": {
+                "integration": "As thoughts arise throughout the day, notice their empty nature. You don't need to believe every thought or identify with it. They're just weather patterns in the mind.",
+                "koan": "What is a thought before it's thought?"
+            }
+        }
+
+    def _neti_neti_emotion(self) -> Dict[str, Any]:
+        """Neti Neti for investigating emotions"""
+        # Similar structure for emotions
+        return {
+            "overview": "Investigate the constructed nature of emotions.",
+            "stages": [
+                {
+                    "stage": 1,
+                    "investigation": "Where is the emotion located?",
+                    "contemplation": "When you feel anger (or sadness, joy, fear), where is it? In the chest? The head? The whole body? Notice: you can't pinpoint an exact location. It's a constellation of sensations we label 'anger'.",
+                    "negation": "Emotions have no fixed location",
+                    "pause_instruction": "Rest here for 3 breaths."
+                }
+            ],
+            "closing": {
+                "integration": "Emotions arise, function, and pass - all without inherent existence. You can feel them fully without reifying them as solid things.",
+                "koan": "What is anger when you stop calling it anger?"
+            }
+        }
+
+    def _neti_neti_consciousness(self) -> Dict[str, Any]:
+        """Neti Neti for investigating consciousness itself"""
+        return {
+            "overview": "The most subtle investigation - consciousness investigating itself.",
+            "stages": [
+                {
+                    "stage": 1,
+                    "investigation": "Can consciousness observe itself?",
+                    "contemplation": "Try to be aware of awareness. Notice: there's always a split - the aware-er and the aware-ed. But who is the aware-er? If you try to observe that, it becomes the observed. Awareness always slips away from being grasped.",
+                    "negation": "Consciousness cannot objectify itself",
+                    "pause_instruction": "Rest here for 5 breaths."
+                }
+            ],
+            "closing": {
+                "integration": "Consciousness is not a thing to be found - it's the empty knowing in which all experience arises. Empty of essence, yet luminously present.",
+                "koan": "What was your original face before you were conscious?"
+            }
+        }
+
+    def generate_two_truths_contemplation(
+        self,
+        phenomenon: str,
+        user_context: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate Two Truths contemplation for holding conventional and ultimate truths together.
+
+        Args:
+            phenomenon: What to investigate (anger, thought, language, etc.)
+            user_context: Current user context (optional)
+
+        Returns:
+            Complete two truths practice
+        """
+        return {
+            "practice_type": "two_truths_contemplation",
+            "phenomenon": phenomenon,
+
+            "conventional_truth_practice": {
+                "instruction": f"Notice the experience called '{phenomenon}'",
+                "steps": [
+                    f"Feel the experience directly - what is present when '{phenomenon}' is here?",
+                    "Notice its effects - how does it influence thoughts, emotions, behavior?",
+                    f"Recognize: This is what we conventionally call '{phenomenon}'. The word functions to communicate this experience.",
+                    "Observe: At the conventional level, it's real, it has effects, it matters."
+                ],
+                "affirmation": f"At the conventional level, {phenomenon} is real. It has effects. It's unpleasant or pleasant. All of this is true conventionally."
+            },
+
+            "ultimate_truth_practice": {
+                "instruction": f"Investigate the emptiness of '{phenomenon}'",
+                "steps": [
+                    f"Where is '{phenomenon}' located? In the body? In thoughts? In the situation?",
+                    f"Notice: The various components are just what they are. Where is the inherent '{phenomenon}'?",
+                    f"Recognize: '{phenomenon}' is a label applied to a constellation of conditions. It has no essence separate from these conditions.",
+                    f"Notice: As soon as conditions change, what we called '{phenomenon}' transforms or dissolves."
+                ],
+                "affirmation": f"At the ultimate level, {phenomenon} is empty of inherent existence. It's a constructed category projected onto dependently arisen experiences."
+            },
+
+            "both_truths_together": {
+                "instruction": "Now hold both truths simultaneously",
+                "contemplation": f"{phenomenon.capitalize()} is happening (conventional) AND {phenomenon} is empty (ultimate). Neither truth cancels the other. The emptiness is not somewhere else - it's the very nature of the {phenomenon} that's occurring.",
+                "paradox": f"Can you rest in the experience where {phenomenon} is both fully present and completely empty? Where it matters (you might need to address the situation) and doesn't matter (it's just conditions arising)?"
+            },
+
+            "insight_pointers": [
+                f"If you're only seeing conventional truth: You're clinging to {phenomenon} as real. It will persist.",
+                f"If you're only seeing ultimate truth: You might dismiss {phenomenon} as 'just illusion' and not address actual conditions. This is bypassing.",
+                f"The middle path: Respond skillfully to {phenomenon} (conventional) while knowing it has no fixed nature (ultimate)."
+            ],
+
+            "closing_koan": f"When {phenomenon} arises, what arises? When {phenomenon} dissolves, what dissolves?"
+        }
+
+    def generate_dependent_origination_inquiry(
+        self,
+        starting_point: str,
+        trace_backward: bool = True,
+        trace_forward: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Generate practice for investigating dependent origination.
+
+        Traces conditions backward (what gave rise to this?) and
+        forward (what does this give rise to?).
+        """
+        return {
+            "practice_type": "dependent_origination_inquiry",
+            "starting_concept": starting_point,
+
+            "backward_trace": {
+                "instruction": "Trace the conditions that gave rise to this belief/concept",
+                "inquiry_steps": [
+                    {
+                        "question": f"Where did you first encounter the idea of '{starting_point}'?",
+                        "contemplation": "Recall early experiences. Notice: The concept was taught, not discovered innately. It arose from cultural conditioning."
+                    },
+                    {
+                        "question": f"What makes '{starting_point}' seem real?",
+                        "contemplation": "Perhaps you've had experiences that seemed to confirm it. Notice: You interpreted those experiences through the lens of this concept."
+                    },
+                    {
+                        "question": f"What would need to be different for '{starting_point}' to not make sense?",
+                        "contemplation": "Imagine a different cultural/historical context. Notice: The concept depends on specific frameworks."
+                    },
+                    {
+                        "question": f"What beliefs underlie belief in '{starting_point}'?",
+                        "contemplation": "Trace the chain backward. Notice: Beliefs rest on other beliefs, all the way down."
+                    }
+                ],
+                "realization": f"The belief in '{starting_point}' doesn't exist independently. It arose from countless conditions."
+            } if trace_backward else None,
+
+            "forward_trace": {
+                "instruction": "Notice what arises dependent on this belief",
+                "inquiry_steps": [
+                    {
+                        "question": f"How does believing in '{starting_point}' shape your experience?",
+                        "contemplation": "Notice emotions, perceptions, interpretations that arise. They're all conditioned by this belief."
+                    },
+                    {
+                        "question": f"What actions arise from belief in '{starting_point}'?",
+                        "contemplation": "Notice behaviors. They're not inherent responses - they arise from the belief."
+                    },
+                    {
+                        "question": f"What further beliefs does this enable?",
+                        "contemplation": "Notice: Beliefs are generative. One belief gives rise to others."
+                    }
+                ],
+                "realization": f"The belief in '{starting_point}' isn't isolated - it's a generative condition producing further conditions."
+            } if trace_forward else None,
+
+            "middle_path_insight": {
+                "contemplation": f"The belief in '{starting_point}' arose from conditions (backward) and gives rise to conditions (forward). It's a link in an infinite chain of dependent origination. It has no independent existence, yet it functions powerfully.",
+                "question": f"Can you hold the belief in '{starting_point}' lightly, using it when helpful while seeing through its empty nature?"
+            },
+
+            "practical_integration": {
+                "daily_life": f"Next time you think about '{starting_point}':",
+                "steps": [
+                    "Notice the thought arise",
+                    "Ask: What conditions gave rise to this thought right now?",
+                    "Ask: What does this thought give rise to?",
+                    "See the whole chain of dependent origination",
+                    "Act skillfully without clinging to the belief as inherently true"
+                ]
+            }
+        }

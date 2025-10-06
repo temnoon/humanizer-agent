@@ -2,8 +2,10 @@ import { useState, useMemo } from 'react'
 import axios from 'axios'
 import './App.css'
 import { checkTokenLimit, getWordCount, formatNumber } from './utils/tokenEstimator'
+import NarrativeAnalyzer from './components/NarrativeAnalyzer'
 
 function App() {
+  const [activeTab, setActiveTab] = useState('transform') // 'transform' or 'narrative'
   const [content, setContent] = useState('')
   const [persona, setPersona] = useState('')
   const [namespace, setNamespace] = useState('')
@@ -384,6 +386,8 @@ function App() {
           </div>
         </div>
       </div>
+        </>
+        )}
     </div>
   )
 }

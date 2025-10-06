@@ -22,13 +22,18 @@ class Settings(BaseSettings):
     port: int = 8000
     reload: bool = True
     
-    # Database
-    database_url: str = "sqlite+aiosqlite:///./humanizer.db"
+    # Database - PostgreSQL with pgvector
+    database_url: str = "postgresql+asyncpg://humanizer:humanizer@localhost:5432/humanizer"
+
+    # Embedding Configuration
+    embedding_model: str = "voyage-3"  # or "text-embedding-3-small" for OpenAI
+    embedding_dimension: int = 1536
+    enable_vector_search: bool = True
     
     # Agent Configuration
     default_model: str = "claude-sonnet-4-5-20250929"
     max_tokens: int = 4096
-    temperature: float = 1.0
+    temperature: float = 0.7  # Must be < 1.0 unless thinking is enabled
     
     # Token Limits by Tier
     free_tier_input_limit: int = 2000  # tokens

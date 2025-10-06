@@ -59,3 +59,6 @@ htmlcov/
 # Logs
 logs/
 *.log
+
+# Media uploads (user files)
+backend/media/

@@ -1,0 +1,75 @@
+[tool.poetry]
+name = "humanizer-agent"
+version = "0.2.0"
+description = "Transform narratives across belief frameworks while revealing the subjective nature of linguistic reality"
+authors = ["Humanizer Team"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+# Core Framework
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+pydantic = "^2.6.0"
+pydantic-settings = "^2.1.0"
+
+# Anthropic API
+anthropic = "^0.18.1"
+
+# Token Counting
+tiktoken = "^0.5.2"
+
+# Database - PostgreSQL + pgvector
+sqlalchemy = "^2.0.25"
+alembic = "^1.13.1"
+aiosqlite = "^0.19.0"
+asyncpg = "^0.29.0"
+pgvector = "^0.2.5"
+psycopg2-binary = "^2.9.9"
+greenlet = "^3.0.3"
+
+# File Handling
+python-multipart = "^0.0.6"
+aiofiles = "^23.2.1"
+
+# Utilities
+python-dotenv = "^1.0.0"
+python-dateutil = "^2.8.2"
+httpx = "^0.26.0"
+numpy = "^1.26.3"
+
+# Semantic Analysis - CRITICAL DEPENDENCY
+sentence-transformers = "^2.3.0"
+# Note: sentence-transformers 2.2.2 has huggingface_hub compatibility issues
+# Upgrading to 2.3.0+ which uses updated huggingface_hub API
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.4"
+pytest-asyncio = "^0.23.3"
+black = "^24.1.1"
+mypy = "^1.8.0"
+ruff = "^0.1.14"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"

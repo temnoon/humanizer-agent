@@ -1,10 +1,13 @@
 """API routes for transformation operations."""
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import uuid
 from datetime import datetime
 
+from database import get_db, embedding_service
+from models.db_models import Transformation as DBTransformation
 from models.schemas import (
     TransformationRequest,
     TransformationResponse,
@@ -112,11 +115,12 @@ async def check_document_tokens(request: dict):
 @router.post("/transform", response_model=TransformationResponse)
 async def create_transformation(
     request: TransformationRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Start a new narrative transformation.
-    
+
     The transformation runs in the background and can be monitored
     via the status endpoint.
     """
@@ -147,7 +151,7 @@ async def create_transformation(
             request.user_tier
         )
         
-        # Store initial transformation record
+        # Store initial transformation record (old system)
         await storage.create_transformation(
             id=transformation_id,
             original_content=request.content,
@@ -157,7 +161,28 @@ async def create_transformation(
             depth=request.depth,
             preserve_structure=request.preserve_structure
         )
-        
+
+        # Also save to PostgreSQL if session/user provided
+        if request.session_id and request.user_id:
+            source_embedding = await embedding_service.generate_embedding(request.content)
+
+            db_transformation = DBTransformation(
+                id=uuid.UUID(transformation_id),
+                session_id=uuid.UUID(request.session_id),
+                user_id=uuid.UUID(request.user_id),
+                source_text=request.content,
+                source_embedding=source_embedding,
+                persona=request.persona,
+                namespace=request.namespace,
+                style=request.style.value,
+                transformed_content=None,  # Will be updated when complete
+                transformed_embedding=None,
+                status="processing",
+                extra_metadata={"transformation_type": "single"}
+            )
+            db.add(db_transformation)
+            await db.commit()
+
         # Start transformation in background
         if needs_chunking:
             background_tasks.add_task(
@@ -206,7 +231,7 @@ async def process_transformation(
             TransformationStatusEnum.PROCESSING,
             progress=0.1
         )
-        
+
         # Perform transformation
         result = await agent.transform(
             content=request.content,
@@ -217,9 +242,9 @@ async def process_transformation(
             preserve_structure=request.preserve_structure,
             transformation_id=transformation_id
         )
-        
+
         if result["success"]:
-            # Store transformed content
+            # Store transformed content (old system)
             await storage.update_transformation(
                 transformation_id,
                 transformed_content=result["transformed_content"],
@@ -227,6 +252,23 @@ async def process_transformation(
                 progress=1.0,
                 metadata=result["metadata"]
             )
+
+            # Also update PostgreSQL if this was a session transformation
+            if request.session_id and request.user_id:
+                from database.connection import db_manager
+                transformed_embedding = await embedding_service.generate_embedding(result["transformed_content"])
+
+                async with db_manager.session() as db:
+                    from sqlalchemy import update as sql_update
+                    stmt = sql_update(DBTransformation).where(
+                        DBTransformation.id == uuid.UUID(transformation_id)
+                    ).values(
+                        transformed_content=result["transformed_content"],
+                        transformed_embedding=transformed_embedding,
+                        status="completed"
+                    )
+                    await db.execute(stmt)
+                    await db.commit()
         else:
             # Store error
             await storage.update_status(
@@ -234,7 +276,21 @@ async def process_transformation(
                 TransformationStatusEnum.FAILED,
                 error=result["error"]
             )
-            
+
+            # Update PostgreSQL status if applicable
+            if request.session_id and request.user_id:
+                from database.connection import db_manager
+                async with db_manager.session() as db:
+                    from sqlalchemy import update as sql_update
+                    stmt = sql_update(DBTransformation).where(
+                        DBTransformation.id == uuid.UUID(transformation_id)
+                    ).values(
+                        status="failed",
+                        error_message=result["error"]
+                    )
+                    await db.execute(stmt)
+                    await db.commit()
+
     except Exception as e:
         # Handle unexpected errors
         await storage.update_status(
@@ -242,6 +298,23 @@ async def process_transformation(
             TransformationStatusEnum.FAILED,
             error=str(e)
         )
+
+        # Update PostgreSQL if applicable
+        if request.session_id and request.user_id:
+            try:
+                from database.connection import db_manager
+                async with db_manager.session() as db:
+                    from sqlalchemy import update as sql_update
+                    stmt = sql_update(DBTransformation).where(
+                        DBTransformation.id == uuid.UUID(transformation_id)
+                    ).values(
+                        status="failed",
+                        error_message=str(e)
+                    )
+                    await db.execute(stmt)
+                    await db.commit()
+            except:
+                pass  # Don't fail if PostgreSQL update fails
 
 
 async def process_transformation_chunked(

@@ -10,10 +10,14 @@ anthropic==0.18.1
 # Token Counting
 tiktoken==0.5.2
 
-# Database
+# Database - PostgreSQL + pgvector
 sqlalchemy==2.0.25
 alembic==1.13.1
-aiosqlite==0.19.0
+aiosqlite==0.19.0  # Keep for backward compatibility
+asyncpg==0.29.0  # PostgreSQL async driver
+pgvector==0.2.5  # pgvector support for SQLAlchemy
+psycopg2-binary==2.9.9  # PostgreSQL adapter (for migrations)
+greenlet==3.0.3  # Required for SQLAlchemy async
 
 # File Handling
 python-multipart==0.0.6
@@ -23,6 +27,12 @@ aiofiles==23.2.1
 python-dotenv==1.0.0
 python-dateutil==2.8.2
 httpx==0.26.0
+numpy==1.26.3  # For embedding calculations
+
+# Semantic Analysis - CRITICAL DEPENDENCY
+# IMPORTANT: sentence-transformers 2.2.2 has huggingface_hub compatibility issues
+# Using 2.3.0+ which uses updated huggingface_hub API
+sentence-transformers>=2.3.0
 
 # Development
 pytest==7.4.4

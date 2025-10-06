@@ -27,18 +27,18 @@ class TransformationStatusEnum(str, Enum):
 
 class TransformationRequest(BaseModel):
     """Request to transform a narrative."""
-    
+
     content: str = Field(..., description="Text content to transform")
     persona: str = Field(..., description="Target persona/voice")
     namespace: str = Field(..., description="Conceptual framework/domain")
     style: TransformationStyle = Field(..., description="Writing style")
     preserve_structure: bool = Field(
-        default=True, 
+        default=True,
         description="Maintain original structure"
     )
     depth: float = Field(
-        default=0.5, 
-        ge=0.0, 
+        default=0.5,
+        ge=0.0,
         le=1.0,
         description="Transformation depth (0=minimal, 1=deep)"
     )
@@ -46,6 +46,9 @@ class TransformationRequest(BaseModel):
         default="free",
         description="User subscription tier (free or premium)"
     )
+    # Session integration
+    session_id: Optional[str] = Field(None, description="Session ID to associate transformation with")
+    user_id: Optional[str] = Field(None, description="User ID for the transformation")
 
 
 class TransformationResponse(BaseModel):
