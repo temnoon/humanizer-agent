@@ -243,18 +243,31 @@ Use mcp__chromadb-memory__store_memory:
   - Reapply transformations to new content
   - Full provenance tracking and lineage display
   - 🔧 Transformations tab in sidebar
-- ✅ **BOOK BUILDER FOUNDATION (Oct 5, 2025)**:
+- ✅ **BOOK BUILDER PHASE 1 & 2 (Oct 5, 2025)** - COMPLETE:
   - Database schema: books, book_sections, book_content_links
   - Hierarchical section organization (Part → Chapter → Section)
   - API endpoints for CRUD operations (15 endpoints)
   - Basic UI: create books, view sections, outline view
-  - Links transformation results to book sections
   - 📖 Books tab in sidebar
+  - **MarkdownEditor** (197 lines): Split-pane editor with live preview, CodeMirror integration
+  - **BookSectionSelector** (488 lines): Create books/sections on-the-fly from messages
+  - **"📖 Add to Book" button** in MessageLightbox
+  - Links transformation results AND messages to book sections
+  - Save with Ctrl/Cmd+S, syntax highlighting, image rendering
   - Configuration storage (JSONB for TOML-assisted UI)
+- ✅ **VISION SYSTEM BACKEND (Oct 5, 2025)** - COMPLETE:
+  - Claude vision API integration (OCR, describe, analyze, diagram extraction)
+  - Image upload with metadata extraction (EXIF, AI prompts, dimensions)
+  - AI prompt detection: DALL-E, Stable Diffusion, Midjourney, ComfyUI
+  - Bulk folder upload support
+  - VisionService (350 lines) with optimized prompts for handwriting
+  - ImageMetadataExtractor (380 lines) with Stable Diffusion parameter parsing
+  - API endpoints: /vision/upload, /vision/upload-bulk, /vision/ocr-direct
+  - Integration with transformation pipeline (job types: vision_ocr, vision_describe, vision_analyze)
 
 **Missing Features** ❌:
-- ❌ Book editor (markdown editing with live preview)
-- ❌ "Add to Book" button in message lightbox
+- ❌ **Vision System Frontend** (ImageUploader, ImageGallery, ImageBrowser) - 60% remaining
+- ❌ Vision job processor handlers (background OCR processing)
 - ❌ TOML-assisted configuration UI
 - ❌ LaTeX export from book builder
 - ❌ PDF compositor
@@ -281,10 +294,11 @@ Use mcp__chromadb-memory__store_memory:
 Conversations: 1,660
 Messages: 46,379
 Chunks: 33,952
-Media: 8,640 (822 with files, 7,818 placeholders)
+Media: 8,640+ (ChatGPT archive + new uploads with metadata extraction)
 Collections: ChatGPT archive imported
 Pipeline: 13+ jobs (multiple completed transformations across all 4 types)
-Books: 0 (new feature, ready for use)
+Books: Ready for use (Phase 1 & 2 complete)
+Book Sections: Markdown editor ready
 ```
 
 ---
@@ -576,30 +590,35 @@ By following this checklist, Claude Code will:
 
 Based on current state, next session should focus on:
 
-**Priority 1: Complete Book Builder Phase 2** (Markdown Editor)
-- Add "📖 Add to Book" button in MessageLightbox
-- Create BookSectionSelector modal for choosing book/section
-- Implement markdown editor for sections (Monaco or CodeMirror)
-- Add live preview panel
-- Section management UI (add/delete/reorder/nest)
+**Priority 1: Vision System Frontend** (IMMEDIATE - 60% remaining)
+- ImageUploader component with drag-and-drop + folder selection (webkitdirectory)
+- Upload progress bars with preview grid
+- ImageGallery: grid view, slideshow mode, filtering by generator/date
+- ImageBrowser modal for adding images to books
+- Display detected AI prompts and metadata
 
-**Priority 2: Book Builder Phase 3** (Configuration & Export)
+**Priority 2: Vision OCR Workflow**
+- Job processor handlers for vision types (vision_ocr, vision_describe, etc.)
+- OCR result viewing UI (side-by-side image + transcription)
+- "Add OCR to Book" integration
+- Test with real handwritten notebook pages
+
+**Priority 3: Book Builder Phase 3** (Configuration & Export)
 - TOML-assisted configuration UI
-- Export book to markdown
+- Export book to markdown file
 - Export book to LaTeX (using transformation system)
 - PDF generation pipeline integration
 
-**Priority 3: Technical Debt** (Refactoring)
+**Priority 4: Technical Debt** (Deferred)
 - **CRITICAL**: Split library_routes.py (1005 lines) - extract transformations routes
 - Fix Alembic migration baseline (currently using create_all())
 - Resolve embedding dimension mismatch (1024 vs 1536)
 
-**Priority 4: Deferred Features**
+**Priority 5: Deferred Features**
 - LaTeX typesetting engine
 - Cover image generator
 - Bibliography generator
-- Archive-to-structure converter
 
 ---
 
-*Last Updated: Oct 5, 2025 - Transformations Library + Book Builder Phase 1*
+*Last Updated: Oct 5, 2025 - Book Builder Phase 1 & 2 + Vision System Backend Complete*
