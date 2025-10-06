@@ -107,19 +107,22 @@ async def create_book(
 
 @router.get("/")
 async def list_books(
-    user_id: str = Query(..., description="User ID"),
+    user_id: Optional[str] = Query(None, description="User ID (optional - shows all books if not provided)"),
     book_type: Optional[str] = None,
     limit: int = Query(50, le=200),
     offset: int = 0,
     db: AsyncSession = Depends(get_db)
 ):
-    """List all books for a user."""
-    try:
-        user_uuid = UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID format")
+    """List all books, optionally filtered by user_id."""
+    query = select(Book).order_by(desc(Book.updated_at))
 
-    query = select(Book).where(Book.user_id == user_uuid).order_by(desc(Book.updated_at))
+    # Optional user filtering
+    if user_id:
+        try:
+            user_uuid = UUID(user_id)
+            query = query.where(Book.user_id == user_uuid)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
 
     if book_type:
         query = query.where(Book.book_type == book_type)
@@ -441,7 +444,7 @@ async def list_section_content(
     section_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """List all content links in a section."""
+    """List all content links in a section with full content from chunks/jobs."""
     try:
         section_uuid = UUID(section_id)
     except ValueError:
@@ -449,12 +452,40 @@ async def list_section_content(
 
     result = await db.execute(
         select(BookContentLink)
+        .options(
+            selectinload(BookContentLink.chunk),
+            selectinload(BookContentLink.transformation_job)
+        )
         .where(BookContentLink.section_id == section_uuid)
         .order_by(BookContentLink.sequence_number)
     )
     links = result.scalars().all()
 
-    return [link.to_dict() for link in links]
+    # Enrich links with actual content
+    enriched_links = []
+    for link in links:
+        link_data = link.to_dict()
+
+        # Add chunk content if present
+        if link.chunk:
+            link_data['chunk_content'] = link.chunk.content
+            link_data['chunk_metadata'] = {
+                'message_id': str(link.chunk.message_id) if link.chunk.message_id else None,
+                'collection_id': str(link.chunk.collection_id) if link.chunk.collection_id else None,
+            }
+
+        # Add transformation job result if present
+        if link.transformation_job:
+            link_data['job_content'] = link.transformation_job.result
+            link_data['job_metadata'] = {
+                'job_type': link.transformation_job.job_type,
+                'status': link.transformation_job.status,
+                'source_message_id': str(link.transformation_job.source_message_id) if link.transformation_job.source_message_id else None,
+            }
+
+        enriched_links.append(link_data)
+
+    return enriched_links
 
 
 @router.delete("/{book_id}/sections/{section_id}/content/{link_id}", status_code=204)

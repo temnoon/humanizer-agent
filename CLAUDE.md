@@ -243,18 +243,32 @@ Use mcp__chromadb-memory__store_memory:
   - Reapply transformations to new content
   - Full provenance tracking and lineage display
   - 🔧 Transformations tab in sidebar
-- ✅ **BOOK BUILDER PHASE 1 & 2 (Oct 5, 2025)** - COMPLETE:
-  - Database schema: books, book_sections, book_content_links
+- ✅ **BOOK BUILDER FULL SYSTEM (Oct 5-6, 2025)** - PRODUCTION READY:
+  - **Database**: books, book_sections, book_content_links (fully persistent, 4 books in production)
   - Hierarchical section organization (Part → Chapter → Section)
   - API endpoints for CRUD operations (15 endpoints)
-  - Basic UI: create books, view sections, outline view
-  - 📖 Books tab in sidebar
-  - **MarkdownEditor** (197 lines): Split-pane editor with live preview, CodeMirror integration
+  - 📖 Books tab in sidebar with book card list
+  - **BookViewer** (217 lines): Full-screen book editor in main workspace
+    - Click book card → opens in main pane (not sidebar)
+    - Left: Section navigator sidebar (264px) with all sections
+    - Right: Resizable markdown editor/preview panes (react-resizable-panels)
+    - Drag purple handle to resize editor/preview (25-75% range)
+    - Auto-loads first section on open
+    - Close button returns to book list
+  - **MarkdownEditor** (306 lines): Resizable split-pane editor with live preview
+    - LaTeX/math rendering (KaTeX)
+    - Syntax highlighting for code blocks (react-syntax-highlighter)
+    - Enhanced table styling with borders/headers
+    - Image display with hover effects
+    - Prev/Next section navigation buttons
+    - Keyboard shortcuts (Ctrl+→/← for navigation)
+    - **Resizable panes**: Drag handle between editor/preview (react-resizable-panels)
   - **BookSectionSelector** (488 lines): Create books/sections on-the-fly from messages
   - **"📖 Add to Book" button** in MessageLightbox
-  - Links transformation results AND messages to book sections
-  - Save with Ctrl/Cmd+S, syntax highlighting, image rendering
+  - **Multiple messages per section**: Appends with separator
+  - Save with Ctrl/Cmd+S, auto-save on section switch
   - Configuration storage (JSONB for TOML-assisted UI)
+  - **Known issue**: Some books disappearing (needs investigation of CASCADE delete behavior)
 - ✅ **VISION SYSTEM BACKEND (Oct 5, 2025)** - COMPLETE:
   - Claude vision API integration (OCR, describe, analyze, diagram extraction)
   - Image upload with metadata extraction (EXIF, AI prompts, dimensions)
@@ -264,15 +278,73 @@ Use mcp__chromadb-memory__store_memory:
   - ImageMetadataExtractor (380 lines) with Stable Diffusion parameter parsing
   - API endpoints: /vision/upload, /vision/upload-bulk, /vision/ocr-direct
   - Integration with transformation pipeline (job types: vision_ocr, vision_describe, vision_analyze)
+- ✅ **IMAGE UPLOAD SYSTEM (Oct 6, 2025)** - PRODUCTION READY:
+  - **ImageUploader Component** (514 lines):
+    - Folder upload with webkitdirectory support
+    - Drag-and-drop for files and folders
+    - Batch upload (10 images at a time)
+    - Image preview grid with remove buttons
+    - Progress tracking with upload counter
+    - Integrated into Import tab with sub-tabs
+  - **Apple Photos Integration (Mac only)**:
+    - ApplePhotosService (200 lines) using AppleScript
+    - List all albums with photo counts
+    - Export album photos (up to 50 per album)
+    - Export recent photos (last 30 days, max 100)
+    - API endpoints: /apple-photos/available, /albums, /export-album, /export-recent
+    - UI: Browse albums, export to temp folder, upload via folder select
+- ✅ **PRODUCTION UX ENHANCEMENTS (Oct 6, 2025)**:
+  - **ResultsModal**: Copy-to-clipboard buttons, full text display (no truncation)
+  - **Code blocks**: Horizontal scroll, line numbers, no overflow issues
+  - **All markdown rendering**: LaTeX math, syntax highlighting, enhanced tables
+  - **Gizmo ID Editing**: Double-click to edit Custom GPT names (fixed text selection issues)
+  - **Sass Removed**: Converted workstation.scss to plain CSS (no deprecation warnings)
+  - **Resizable Panes**: All editor/preview splits now draggable with visual feedback
+  - **Sidebar Overflow Fix**: Content cards confined within sidebar, no longer cover main pane
+- ✅ **IMAGE BROWSER (Oct 6, 2025)** - PRODUCTION READY:
+  - **ImageBrowser Component** (622 lines): Full-featured browser in main document pane
+    - Infinite scroll lazy loading (100 images/page, loads all 8,640+ images)
+    - IntersectionObserver for smooth pagination
+    - Grid view with responsive layout (3-5 columns)
+    - Search by filename or AI prompt text
+    - Filter by generator (DALL-E, Stable Diffusion, Midjourney, User Upload)
+  - **Detailed Metadata Panel**:
+    - Image preview with full-size display
+    - AI prompts, EXIF data, dimensions, generator info
+    - **Source conversation link** (click to navigate to original conversation)
+    - Source message preview (first 500 chars)
+    - Transformations list (when linked)
+  - **Photos.app Integration View**:
+    - Browse all Mac Photos.app albums in left sidebar
+    - Export album (up to 50 photos) to ~/humanizer-agent/tmp
+    - Export recent photos (last 30 days, up to 100)
+    - Clear export workflow with instructions
+  - **API Endpoint**: GET /api/library/media/{id}/metadata
+    - Returns conversation/message links, custom metadata, transformations
+  - **🖼️ Images tab** in sidebar with "Open Full Image Browser" button
+  - Export path: ~/humanizer-agent/tmp (easy to access from file picker)
+- ✅ **IMAGE RECOVERY SYSTEM (Oct 6, 2025)**:
+  - **Problem**: ChatGPT export file IDs change between versions, breaking image links
+  - **Solution**: Filename-based recovery across chat5/chat6/chat7 archives
+  - **Results**: Recovered 1,019 images (38.7% success rate) from 2,634 missing
+  - **Files**: recover_images_by_filename.py (151 lines), dry_run_recovery.py
+  - Recoverable via rerun if new archive versions obtained
+  - Remaining 6,799 files truly absent from all archive versions
 
 **Missing Features** ❌:
-- ❌ **Vision System Frontend** (ImageUploader, ImageGallery, ImageBrowser) - 60% remaining
 - ❌ Vision job processor handlers (background OCR processing)
+- ❌ Direct Photos.app album viewing (currently export-only workflow)
+- ❌ Transformation → Media linkage (TODO in library_routes.py:684)
+- ❌ ImageBrowser → Book integration (add images to book sections)
 - ❌ TOML-assisted configuration UI
 - ❌ LaTeX export from book builder
 - ❌ PDF compositor
 - ❌ Cover image generator
 - ❌ Bibliography generator
+
+**Known Bugs** 🐛:
+- 🐛 **Book disappearing bug**: User reports scrapbook disappeared (needs CASCADE delete investigation)
+- 🐛 **Potential deletion confirmation**: No confirmation dialog when deleting books
 
 **Large Files Needing Refactoring**:
 - ✅ `backend/services/madhyamaka/` (REFACTORED + TESTED) - Was 1003 lines, now 10 modular files (2,132 total)
@@ -280,7 +352,9 @@ Use mcp__chromadb-memory__store_memory:
   - **Test Results**: 126 passing / 16 failing (89% pass rate) ✅ PRODUCTION READY
   - Detection thresholds tuned, methods implemented, core functionality validated
   - Old file deprecated: madhyamaka_service.py.deprecated
-- **`backend/api/library_routes.py` (1005 lines)** ⚠️ CRITICAL - split transformations routes to separate file
+- **`backend/api/library_routes.py` (1057 lines)** ⚠️ CRITICAL - split transformations routes to separate file
+  - Added GET /media/{id}/metadata endpoint (89 lines) for Image Browser
+- **`backend/api/vision_routes.py` (640 lines)** ⚠️ NEW - Consider splitting Apple Photos endpoints to separate file
 - `backend/api/routes.py` (567 lines) → extract transformation routes to separate file
 - `backend/models/chunk_models.py` (558 lines) → split by domain (chunks, messages, collections, media)
 - `backend/api/philosophical_routes.py` (540 lines) → borderline, consider splitting
@@ -289,16 +363,17 @@ Use mcp__chromadb-memory__store_memory:
 
 **Target**: 200-300 lines per file, refactor when >500 lines
 
-**Database Statistics** (as of Oct 5, 2025):
+**Database Statistics** (as of Oct 6, 2025):
 ```
 Conversations: 1,660
 Messages: 46,379
 Chunks: 33,952
-Media: 8,640+ (ChatGPT archive + new uploads with metadata extraction)
+Media: 8,640 total (1,841 with files, 6,799 missing after recovery)
 Collections: ChatGPT archive imported
 Pipeline: 13+ jobs (multiple completed transformations across all 4 types)
-Books: Ready for use (Phase 1 & 2 complete)
-Book Sections: Markdown editor ready
+Books: 4 active (fully persistent across sessions)
+Book Sections: 7 sections with markdown content
+Images Browsable: 1,841 images with infinite scroll + metadata
 ```
 
 ---
@@ -590,12 +665,11 @@ By following this checklist, Claude Code will:
 
 Based on current state, next session should focus on:
 
-**Priority 1: Vision System Frontend** (IMMEDIATE - 60% remaining)
-- ImageUploader component with drag-and-drop + folder selection (webkitdirectory)
-- Upload progress bars with preview grid
-- ImageGallery: grid view, slideshow mode, filtering by generator/date
+**Priority 1: Image Gallery & Browser** (Vision System - 40% remaining)
+- ImageGallery component: grid view, slideshow mode, filtering by generator/date
 - ImageBrowser modal for adding images to books
-- Display detected AI prompts and metadata
+- Display detected AI prompts and metadata in gallery
+- Integration with book builder
 
 **Priority 2: Vision OCR Workflow**
 - Job processor handlers for vision types (vision_ocr, vision_describe, etc.)
@@ -609,8 +683,9 @@ Based on current state, next session should focus on:
 - Export book to LaTeX (using transformation system)
 - PDF generation pipeline integration
 
-**Priority 4: Technical Debt** (Deferred)
+**Priority 4: Technical Debt** (CRITICAL)
 - **CRITICAL**: Split library_routes.py (1005 lines) - extract transformations routes
+- Consider splitting vision_routes.py (640 lines) - extract Apple Photos to separate file
 - Fix Alembic migration baseline (currently using create_all())
 - Resolve embedding dimension mismatch (1024 vs 1536)
 
@@ -621,4 +696,4 @@ Based on current state, next session should focus on:
 
 ---
 
-*Last Updated: Oct 5, 2025 - Book Builder Phase 1 & 2 + Vision System Backend Complete*
+*Last Updated: Oct 6, 2025 - Book Viewer Production Ready + Image Recovery (1,019 files) + Resizable Panes*

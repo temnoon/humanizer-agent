@@ -1,0 +1,228 @@
+/* Humanizer Workstation - Customizable Theme System */
+/* CSS Custom Properties for runtime theme switching */
+
+:root {
+  /* Three Realms Color System */
+  --realm-corporeal: #2D7D6E;
+  --realm-corporeal-light: #4A9B8E;
+  --realm-corporeal-lighter: #6DBFB3;
+  --realm-corporeal-dark: #1E5A4F;
+
+  --realm-symbolic: #6B46C1;
+  --realm-symbolic-light: #8B5CF6;
+  --realm-symbolic-lighter: #A78BFA;
+  --realm-symbolic-dark: #553399;
+
+  --realm-subjective: #1E1B4B;
+  --realm-subjective-light: #312E81;
+  --realm-subjective-lighter: #4C1D95;
+  --realm-subjective-dark: #0F0D26;
+
+  /* Base Colors */
+  --bg-primary: #030712;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1f2937;
+  --bg-hover: #374151;
+
+  --text-primary: #f9fafb;
+  --text-secondary: #e5e7eb;
+  --text-tertiary: #9ca3af;
+  --text-muted: #6b7280;
+
+  --border-primary: #1f2937;
+  --border-secondary: #374151;
+
+  /* Accent Colors */
+  --accent-success: #10b981;
+  --accent-warning: #f59e0b;
+  --accent-error: #ef4444;
+  --accent-info: #3b82f6;
+
+  /* Font Families (Three Realms system) */
+  --font-contemplative: 'Crimson Pro', 'Lora', Georgia, serif;
+  --font-structural: 'Inter', 'Source Sans 3', system-ui, sans-serif;
+  --font-grounded: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+
+  /* Font Sizes */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+
+  /* Line Heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.75;
+  --leading-loose: 2;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  /* Layout */
+  --sidebar-min-width: 240px;
+  --sidebar-default-width: 320px;
+  --sidebar-max-width: 600px;
+  --sidebar-width: 320px;
+
+  --header-height: 3rem;
+  --toolbar-height: 2.5rem;
+
+  --border-radius-sm: 0.25rem;
+  --border-radius-md: 0.5rem;
+  --border-radius-lg: 0.75rem;
+
+  /* Effects */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+
+  --transition-fast: 150ms ease;
+  --transition-normal: 300ms ease;
+  --transition-slow: 500ms ease;
+}
+
+/* ============================================================================
+   UTILITY CLASSES
+   ============================================================================ */
+
+.realm-corporeal-bg { background-color: var(--realm-corporeal); }
+.realm-symbolic-bg { background-color: var(--realm-symbolic); }
+.realm-subjective-bg { background-color: var(--realm-subjective); }
+
+.realm-corporeal-text { color: var(--realm-corporeal); }
+.realm-symbolic-text { color: var(--realm-symbolic); }
+.realm-subjective-text { color: var(--realm-subjective); }
+
+.font-contemplative { font-family: var(--font-contemplative); }
+.font-structural { font-family: var(--font-structural); }
+.font-grounded { font-family: var(--font-grounded); }
+
+/* ============================================================================
+   DOCUMENT RENDERING STYLES
+   ============================================================================ */
+
+.document-viewer .prose {
+  font-family: var(--font-contemplative);
+  color: var(--text-primary);
+  line-height: var(--leading-relaxed);
+}
+
+.document-viewer .prose h1,
+.document-viewer .prose h2,
+.document-viewer .prose h3,
+.document-viewer .prose h4,
+.document-viewer .prose h5,
+.document-viewer .prose h6 {
+  font-family: var(--font-structural);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.document-viewer .prose code {
+  font-family: var(--font-grounded);
+  background-color: var(--bg-tertiary);
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.9em;
+}
+
+.document-viewer .prose pre {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--border-radius-md);
+  overflow-x: auto;
+}
+
+.document-viewer .prose blockquote {
+  border-left: 4px solid var(--realm-symbolic);
+  padding-left: var(--spacing-lg);
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.document-viewer .prose table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.document-viewer .prose table th,
+.document-viewer .prose table td {
+  border: 1px solid var(--border-primary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+}
+
+.document-viewer .prose table th {
+  background-color: var(--bg-tertiary);
+  font-weight: 600;
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal);
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft var(--transition-normal);
+}
+
+.animate-slide-in-right {
+  animation: slideInRight var(--transition-normal);
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ============================================================================
+   RESPONSIVE BREAKPOINTS (using media queries)
+   ============================================================================ */
+
+/* Mobile: < 768px */
+/* Tablet: 768px - 1023px */
+/* Desktop: >= 1024px */

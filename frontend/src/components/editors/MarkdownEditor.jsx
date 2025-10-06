@@ -4,6 +4,13 @@ import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import 'katex/dist/katex.min.css';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import ContentCard from '../ContentCard';
 
 /**
  * MarkdownEditor Component
@@ -18,14 +25,44 @@ import remarkGfm from 'remark-gfm';
  */
 export default function MarkdownEditor({
   content,
+  contentLinks = [],
+  bookId,
+  sectionId,
   onSave,
   onContentChange,
   placeholder = 'Start writing your section...',
-  readOnly = false
+  readOnly = false,
+  onPreviousSection,
+  onNextSection,
+  hasPrevious = false,
+  hasNext = false
 }) {
   const [editorContent, setEditorContent] = useState(content || '');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Concatenate content links + inline content for preview
+  const getFullContent = useCallback(() => {
+    const parts = [];
+
+    // Add content from content links (in order)
+    contentLinks.forEach((link, idx) => {
+      const linkContent = link.chunk_content || link.job_content || '';
+      if (linkContent) {
+        // Add separator between cards
+        if (idx > 0) parts.push('\n\n---\n\n');
+        parts.push(linkContent);
+      }
+    });
+
+    // Add inline section content if present
+    if (editorContent) {
+      if (parts.length > 0) parts.push('\n\n---\n\n');
+      parts.push(editorContent);
+    }
+
+    return parts.join('');
+  }, [contentLinks, editorContent]);
 
   // Update editor when content prop changes
   useEffect(() => {
@@ -76,6 +113,36 @@ export default function MarkdownEditor({
       {/* Toolbar */}
       <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
+          {/* Section Navigation */}
+          {(onPreviousSection || onNextSection) && (
+            <div className="flex items-center gap-1 mr-2 border-r border-gray-700 pr-3">
+              <button
+                onClick={onPreviousSection}
+                disabled={!hasPrevious}
+                className={`px-2 py-1 rounded text-sm transition-colors ${
+                  hasPrevious
+                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                    : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                }`}
+                title="Previous section (Ctrl+←)"
+              >
+                ← Prev
+              </button>
+              <button
+                onClick={onNextSection}
+                disabled={!hasNext}
+                className={`px-2 py-1 rounded text-sm transition-colors ${
+                  hasNext
+                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                    : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                }`}
+                title="Next section (Ctrl+→)"
+              >
+                Next →
+              </button>
+            </div>
+          )}
+
           <span className="text-sm font-medium">Markdown Editor</span>
           {hasUnsavedChanges && (
             <span className="text-xs text-yellow-400 flex items-center gap-1">
@@ -107,50 +174,83 @@ export default function MarkdownEditor({
 
       {/* Editor and Preview Panes */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Pane: Editor */}
-        <div className="w-1/2 border-r border-gray-700 overflow-hidden flex flex-col">
+        <PanelGroup direction="horizontal">
+          {/* Left Pane: Editor with Content Cards */}
+          <Panel defaultSize={50} minSize={25} maxSize={75}>
+            <div className="h-full border-r border-gray-700 overflow-hidden flex flex-col">
           <div className="bg-gray-850 px-3 py-1 border-b border-gray-700">
             <span className="text-xs text-gray-400 font-medium">Editor</span>
+            {contentLinks.length > 0 && (
+              <span className="ml-2 text-xs text-blue-400">({contentLinks.length} linked content{contentLinks.length > 1 ? 's' : ''})</span>
+            )}
           </div>
           <div className="flex-1 overflow-auto">
-            <CodeMirror
-              value={editorContent}
-              height="100%"
-              extensions={[markdown()]}
-              onChange={handleChange}
-              readOnly={readOnly}
-              theme="dark"
-              basicSetup={{
-                lineNumbers: true,
-                highlightActiveLineGutter: true,
-                highlightActiveLine: true,
-                foldGutter: true,
-                dropCursor: true,
-                indentOnInput: true,
-                syntaxHighlighting: true,
-                bracketMatching: true,
-                closeBrackets: true,
-                autocompletion: true,
-                rectangularSelection: true,
-                crosshairCursor: true,
-                highlightSelectionMatches: true,
-                closeBracketsKeymap: true,
-                searchKeymap: true,
-                foldKeymap: true,
-                completionKeymap: true,
-                lintKeymap: true,
-              }}
-              style={{
-                fontSize: '14px',
-                backgroundColor: '#1f2937', // gray-800
-                height: '100%'
-              }}
-            />
-          </div>
-        </div>
+            {/* Content Cards Section */}
+            {contentLinks.length > 0 && (
+              <div className="bg-gray-900 p-3 border-b-2 border-blue-900">
+                <div className="mb-2 text-xs font-semibold text-blue-300 uppercase tracking-wide">
+                  Linked Content Cards
+                </div>
+                {contentLinks.map((link, idx) => (
+                  <ContentCard
+                    key={link.id}
+                    contentLink={link}
+                    sequenceNumber={idx}
+                  />
+                ))}
+              </div>
+            )}
 
-        {/* Right Pane: Preview */}
-        <div className="w-1/2 overflow-hidden flex flex-col bg-gray-900">
+            {/* Inline Content Editor */}
+            <div className={contentLinks.length > 0 ? 'border-t border-gray-700' : ''}>
+              {contentLinks.length > 0 && (
+                <div className="bg-gray-850 px-3 py-1 border-b border-gray-700">
+                  <span className="text-xs text-gray-400 font-medium">Additional Content (Inline)</span>
+                </div>
+              )}
+              <CodeMirror
+                value={editorContent}
+                height={contentLinks.length > 0 ? '400px' : '100%'}
+                extensions={[markdown()]}
+                onChange={handleChange}
+                readOnly={readOnly}
+                theme="dark"
+                basicSetup={{
+                  lineNumbers: true,
+                  highlightActiveLineGutter: true,
+                  highlightActiveLine: true,
+                  foldGutter: true,
+                  dropCursor: true,
+                  indentOnInput: true,
+                  syntaxHighlighting: true,
+                  bracketMatching: true,
+                  closeBrackets: true,
+                  autocompletion: true,
+                  rectangularSelection: true,
+                  crosshairCursor: true,
+                  highlightSelectionMatches: true,
+                  closeBracketsKeymap: true,
+                  searchKeymap: true,
+                  foldKeymap: true,
+                  completionKeymap: true,
+                  lintKeymap: true,
+                }}
+                style={{
+                  fontSize: '14px',
+                  backgroundColor: '#1f2937', // gray-800
+                  height: contentLinks.length > 0 ? '400px' : '100%'
+                }}
+              />
+            </div>
+          </div>
+            </div>
+          </Panel>
+
+          <PanelResizeHandle className="w-1 hover:w-2 bg-gray-800 hover:bg-realm-symbolic transition-all cursor-col-resize active:bg-realm-symbolic-light" />
+
+          {/* Right Pane: Preview */}
+          <Panel defaultSize={50} minSize={25} maxSize={75}>
+            <div className="h-full overflow-hidden flex flex-col bg-gray-900">
           <div className="bg-gray-850 px-3 py-1 border-b border-gray-700">
             <span className="text-xs text-gray-400 font-medium">Preview</span>
           </div>
@@ -167,9 +267,10 @@ export default function MarkdownEditor({
                           prose-blockquote:border-l-4 prose-blockquote:border-blue-500 prose-blockquote:pl-4 prose-blockquote:italic
                           prose-code:bg-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
                           prose-pre:bg-gray-800 prose-pre:border prose-pre:border-gray-700">
-              {editorContent ? (
+              {getFullContent() ? (
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
                   components={{
                     p: ({children}) => <p className="mb-4 leading-relaxed">{children}</p>,
                     h1: ({children}) => <h1 className="text-3xl font-bold mb-4 mt-6 text-white">{children}</h1>,
@@ -177,10 +278,62 @@ export default function MarkdownEditor({
                     h3: ({children}) => <h3 className="text-xl font-semibold mb-2 mt-4 text-gray-100">{children}</h3>,
                     ul: ({children}) => <ul className="my-4 space-y-2 list-disc pl-6">{children}</ul>,
                     ol: ({children}) => <ol className="my-4 space-y-2 list-decimal pl-6">{children}</ol>,
-                    code: ({inline, children}) =>
-                      inline
-                        ? <code className="bg-gray-800 px-1.5 py-0.5 rounded text-sm text-blue-300">{children}</code>
-                        : <code className="block bg-gray-800 p-3 rounded border border-gray-700 text-sm">{children}</code>,
+                    code: ({node, inline, className, children, ...props}) => {
+                      const match = /language-(\w+)/.exec(className || '');
+                      return !inline && match ? (
+                        <div className="my-4 overflow-x-auto max-w-full">
+                          <SyntaxHighlighter
+                            language={match[1]}
+                            style={vscDarkPlus}
+                            PreTag="div"
+                            showLineNumbers={true}
+                            wrapLines={false}
+                            wrapLongLines={false}
+                            customStyle={{
+                              borderRadius: '0.375rem',
+                              fontSize: '0.875rem',
+                              margin: 0,
+                              maxWidth: '100%',
+                              overflowX: 'auto'
+                            }}
+                            codeTagProps={{
+                              style: {
+                                whiteSpace: 'pre',
+                                overflowWrap: 'normal',
+                                wordBreak: 'normal'
+                              }
+                            }}
+                            {...props}
+                          >
+                            {String(children).replace(/\n$/, '')}
+                          </SyntaxHighlighter>
+                        </div>
+                      ) : (
+                        <code className="bg-gray-800 px-1.5 py-0.5 rounded text-sm text-blue-300" {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
+                    table: ({children}) => (
+                      <div className="my-6 overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-700 border border-gray-700">
+                          {children}
+                        </table>
+                      </div>
+                    ),
+                    thead: ({children}) => <thead className="bg-gray-800">{children}</thead>,
+                    tbody: ({children}) => <tbody className="divide-y divide-gray-700 bg-gray-900">{children}</tbody>,
+                    tr: ({children}) => <tr>{children}</tr>,
+                    th: ({children}) => (
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                        {children}
+                      </th>
+                    ),
+                    td: ({children}) => (
+                      <td className="px-4 py-3 text-sm text-gray-300">
+                        {children}
+                      </td>
+                    ),
                     img: ({node, src, alt, ...props}) => (
                       <img
                         src={src}
@@ -192,14 +345,16 @@ export default function MarkdownEditor({
                     )
                   }}
                 >
-                  {editorContent}
+                  {getFullContent()}
                 </ReactMarkdown>
               ) : (
                 <p className="text-gray-500 italic">{placeholder}</p>
               )}
             </div>
           </div>
-        </div>
+            </div>
+          </Panel>
+        </PanelGroup>
       </div>
     </div>
   );
@@ -207,8 +362,15 @@ export default function MarkdownEditor({
 
 MarkdownEditor.propTypes = {
   content: PropTypes.string,
+  contentLinks: PropTypes.arrayOf(PropTypes.object),
+  bookId: PropTypes.string,
+  sectionId: PropTypes.string,
   onSave: PropTypes.func,
   onContentChange: PropTypes.func,
   placeholder: PropTypes.string,
-  readOnly: PropTypes.bool
+  readOnly: PropTypes.bool,
+  onPreviousSection: PropTypes.func,
+  onNextSection: PropTypes.func,
+  hasPrevious: PropTypes.bool,
+  hasNext: PropTypes.bool
 };

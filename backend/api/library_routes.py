@@ -557,7 +557,138 @@ async def get_library_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/media/{media_id}")
+@router.get("/media")
+async def list_media(
+    collection_id: Optional[str] = None,
+    limit: int = Query(100, le=500),
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    List all media files, optionally filtered by collection.
+
+    Args:
+        collection_id: Optional collection ID to filter by
+        limit: Maximum number of results (default 100, max 500)
+        offset: Number of results to skip
+        db: Database session
+
+    Returns:
+        List of media records with metadata
+    """
+    query = select(Media).order_by(Media.created_at.desc())
+
+    # Filter by collection if provided
+    if collection_id:
+        query = query.where(Media.collection_id == collection_id)
+
+    # Apply pagination
+    query = query.limit(limit).offset(offset)
+
+    result = await db.execute(query)
+    media_records = result.scalars().all()
+
+    # Convert to response format
+    media_list = []
+    for media in media_records:
+        media_list.append({
+            "id": media.original_media_id,
+            "filename": media.original_filename,
+            "mime_type": media.mime_type,
+            "storage_path": media.storage_path,
+            "collection_id": str(media.collection_id),
+            "message_id": str(media.message_id) if media.message_id else None,
+            "created_at": media.created_at.isoformat() if media.created_at else None,
+            "custom_metadata": media.extra_metadata or {}
+        })
+
+    return {"media": media_list, "count": len(media_list)}
+
+
+@router.get("/media/{media_id}/metadata")
+async def get_media_metadata(
+    media_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get detailed metadata for a media file including conversation and transformation links.
+
+    Args:
+        media_id: Original media ID
+        db: Database session
+
+    Returns:
+        Detailed metadata including:
+        - Basic file info
+        - Conversation and message links
+        - Transformations that reference this media
+        - EXIF/custom metadata
+    """
+    from models.pipeline_models import TransformationJob
+
+    # Get media record
+    result = await db.execute(
+        select(Media).where(Media.original_media_id == media_id)
+    )
+    media = result.scalar_one_or_none()
+
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+
+    metadata = {
+        "id": media.original_media_id,
+        "filename": media.original_filename,
+        "mime_type": media.mime_type,
+        "storage_path": media.storage_path,
+        "created_at": media.created_at.isoformat() if media.created_at else None,
+        "custom_metadata": media.extra_metadata or {},
+        "conversation": None,
+        "message": None,
+        "transformations": []
+    }
+
+    # Get conversation info
+    if media.collection_id:
+        conv_result = await db.execute(
+            select(Collection).where(Collection.id == media.collection_id)
+        )
+        conversation = conv_result.scalar_one_or_none()
+        if conversation:
+            metadata["conversation"] = {
+                "id": str(conversation.id),
+                "title": conversation.title,
+                "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+                "source_platform": conversation.source_platform
+            }
+
+    # Get message info
+    if media.message_id:
+        msg_result = await db.execute(
+            select(Message).where(Message.id == media.message_id)
+        )
+        message = msg_result.scalar_one_or_none()
+        if message:
+            # Get message content from chunks
+            chunks_result = await db.execute(
+                select(Chunk.content).where(Chunk.message_id == message.id).limit(1)
+            )
+            first_chunk = chunks_result.scalar_one_or_none()
+
+            metadata["message"] = {
+                "id": str(message.id),
+                "role": message.role,
+                "content": first_chunk[:500] if first_chunk else None,  # First 500 chars
+                "created_at": message.created_at.isoformat() if message.created_at else None
+            }
+
+    # TODO: Find transformations that reference this media
+    # For now, transformations list is empty
+    # Will be implemented when transformation linkage is established
+
+    return metadata
+
+
+@router.get("/media/{media_id}/file")
 async def get_media_file(
     media_id: str,
     db: AsyncSession = Depends(get_db)

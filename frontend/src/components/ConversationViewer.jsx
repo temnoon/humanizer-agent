@@ -220,7 +220,7 @@ export default function ConversationViewer({ collection, onBack }) {
       if (imageAttachment) {
         return {
           type: 'image',
-          url: `/api/library/media/${imageAttachment.id}`,
+          url: `http://localhost:8000/api/library/media/${imageAttachment.id}/file`,
           width: imageAttachment.width,
           height: imageAttachment.height,
           size: imageAttachment.size
@@ -241,7 +241,7 @@ export default function ConversationViewer({ collection, onBack }) {
         const fileId = match[1];
         return {
           type: 'image',
-          url: `/api/library/media/${fileId}`,
+          url: `http://localhost:8000/api/library/media/${fileId}/file`,
           width: null,
           height: null,
           size: null
@@ -263,7 +263,7 @@ export default function ConversationViewer({ collection, onBack }) {
       const fileId = parsed.asset_pointer.replace(/^file-service:\/\//, '').replace(/^file-/, '');
       return {
         type: 'image',
-        url: `/api/library/media/file-${fileId}`,
+        url: `http://localhost:8000/api/library/media/file-${fileId}/file`,
         width: parsed.width,
         height: parsed.height,
         size: parsed.size_bytes
@@ -482,8 +482,9 @@ export default function ConversationViewer({ collection, onBack }) {
                             ) : (
                               <div
                                 onDoubleClick={() => handleGizmoDoubleClick(gizmo.gizmo_id)}
-                                className="cursor-pointer hover:bg-gray-700 rounded px-2 py-1 -mx-2 transition-colors"
+                                className="cursor-pointer hover:bg-gray-700 rounded px-2 py-1 -mx-2 transition-colors select-none"
                                 title="Double-click to edit name"
+                                style={{ userSelect: 'none' }}
                               >
                                 <span className="text-lg font-medium">
                                   {gizmo.custom_name ? (
@@ -541,9 +542,10 @@ export default function ConversationViewer({ collection, onBack }) {
                     )}
                     {message.metadata?.gizmo_id && (
                       <span
-                        className="text-xs px-2 py-1 bg-purple-900/50 rounded cursor-pointer hover:bg-purple-800/50 transition-colors"
+                        className="text-xs px-2 py-1 bg-purple-900/50 rounded cursor-pointer hover:bg-purple-800/50 transition-colors select-none"
                         onDoubleClick={() => handleGizmoDoubleClick(message.metadata.gizmo_id)}
                         title="Double-click to edit Custom GPT name"
+                        style={{ userSelect: 'none' }}
                       >
                         🤖 {getGizmoDisplay(message.metadata.gizmo_id)}
                       </span>
@@ -643,19 +645,29 @@ export default function ConversationViewer({ collection, onBack }) {
                           {message.metadata.attachments.map((attachment, idx) => {
                             // Check if attachment has image data or URL
                             if (attachment.mimeType?.startsWith('image/') || attachment.type === 'image') {
+                              // Construct image URL from fileId or id
+                              const imageUrl = attachment.url ||
+                                (attachment.fileId ? `http://localhost:8000/api/library/media/${attachment.fileId}/file` : null) ||
+                                (attachment.id ? `http://localhost:8000/api/library/media/${attachment.id}/file` : null);
+
                               return (
                                 <div key={idx} className="border border-gray-600 rounded overflow-hidden">
-                                  {attachment.url ? (
+                                  {imageUrl ? (
                                     <img
-                                      src={attachment.url}
+                                      src={imageUrl}
                                       alt={attachment.name || `Tool output ${idx + 1}`}
-                                      className="max-w-full h-auto"
+                                      className="max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
+                                      onClick={() => window.open(imageUrl, '_blank')}
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'block';
+                                      }}
+                                      title="Click to open in new tab"
                                     />
-                                  ) : attachment.fileId ? (
-                                    <div className="p-2 text-xs text-gray-400">
-                                      Image: {attachment.name || attachment.fileId}
-                                    </div>
                                   ) : null}
+                                  <div className="hidden p-2 text-xs text-red-400">
+                                    Image failed to load: {attachment.name || attachment.fileId || attachment.id}
+                                  </div>
                                 </div>
                               );
                             }

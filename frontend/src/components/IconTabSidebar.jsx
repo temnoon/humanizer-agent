@@ -4,6 +4,7 @@ import axios from 'axios'
 import LibraryBrowser from './LibraryBrowser'
 import TransformationsLibrary from './TransformationsLibrary'
 import BookBuilder from './BookBuilder'
+import ImageGallery from './ImageGallery'
 
 /**
  * IconTabSidebar - Hierarchical navigation with icon tabs
@@ -29,6 +30,7 @@ function IconTabSidebar({
   onSessionSelect,
   onConversationSelect,
   onMessageSelect,
+  onBookSelect,
   isMobile = false,
   onClose
 }) {
@@ -162,6 +164,7 @@ function IconTabSidebar({
     { id: 'library', icon: '📚', label: 'Library' },
     { id: 'transformations', icon: '🔧', label: 'Transformations' },
     { id: 'books', icon: '📖', label: 'Books' },
+    { id: 'images', icon: '🖼️', label: 'Images' },
     { id: 'sessions', icon: '🗂️', label: 'Sessions' },
     { id: 'conversations', icon: '💬', label: 'Conversations', disabled: !selectedSession },
     { id: 'messages', icon: '📝', label: 'Messages', disabled: !selectedConversation }
@@ -219,9 +222,9 @@ function IconTabSidebar({
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header with Search */}
-        <div className="p-4 border-b border-gray-800">
+        <div className="p-4 border-b border-gray-800 flex-shrink-0">
           <h2 className="text-lg font-semibold text-white mb-3 capitalize">
             {currentView === 'conversations' && selectedSession && (
               <button
@@ -271,7 +274,27 @@ function IconTabSidebar({
           )}
 
           {currentView === 'books' && (
-            <BookBuilder />
+            <BookBuilder onBookSelect={onBookSelect} />
+          )}
+
+          {currentView === 'images' && (
+            <div className="p-4">
+              <button
+                onClick={() => {
+                  // Signal to parent to open ImageBrowser in main pane
+                  if (window.openImageBrowser) {
+                    window.openImageBrowser();
+                  }
+                }}
+                className="w-full px-4 py-3 bg-realm-symbolic hover:bg-realm-symbolic-light text-white rounded-lg font-medium transition-colors mb-4 flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Open Full Image Browser
+              </button>
+              <ImageGallery selectedCollection={selectedCollection} />
+            </div>
           )}
 
           {currentView === 'sessions' && (
@@ -366,6 +389,7 @@ IconTabSidebar.propTypes = {
   onSessionSelect: PropTypes.func.isRequired,
   onConversationSelect: PropTypes.func.isRequired,
   onMessageSelect: PropTypes.func.isRequired,
+  onBookSelect: PropTypes.func,
   isMobile: PropTypes.bool,
   onClose: PropTypes.func,
 }

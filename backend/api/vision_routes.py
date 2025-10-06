@@ -513,3 +513,131 @@ async def ocr_direct(
     except Exception as e:
         logger.error(f"Direct OCR failed: {e}")
         raise HTTPException(status_code=500, detail=f"OCR failed: {str(e)}")
+
+# ============================================================================
+# APPLE PHOTOS INTEGRATION (macOS only)
+# ============================================================================
+
+@router.get("/apple-photos/available")
+async def check_apple_photos_available():
+    """Check if Apple Photos is available on this system"""
+    from services.apple_photos_service import ApplePhotosService
+
+    service = ApplePhotosService()
+    is_available = service.is_available()
+
+    return {
+        "available": is_available,
+        "platform": service.is_macos,
+        "message": "Apple Photos is available" if is_available else "Apple Photos not available (macOS only)"
+    }
+
+
+@router.get("/apple-photos/albums")
+async def get_apple_photos_albums():
+    """Get list of albums from Apple Photos library"""
+    from services.apple_photos_service import ApplePhotosService
+
+    service = ApplePhotosService()
+
+    if not service.is_available():
+        raise HTTPException(
+            status_code=400,
+            detail="Apple Photos not available on this system"
+        )
+
+    try:
+        albums = service.get_albums()
+        photo_count = service.get_photo_count()
+
+        return {
+            "albums": albums,
+            "total_photos": photo_count
+        }
+    except Exception as e:
+        logger.error(f"Failed to get albums: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/apple-photos/export-album")
+async def export_apple_photos_album(
+    album_name: str,
+    export_path: str,
+    limit: Optional[int] = None
+):
+    """
+    Export photos from an Apple Photos album to a folder
+
+    Args:
+        album_name: Name of the album to export
+        export_path: Path to export photos to
+        limit: Maximum number of photos to export (optional)
+
+    Returns:
+        Export status and stats
+    """
+    from services.apple_photos_service import ApplePhotosService
+
+    service = ApplePhotosService()
+
+    if not service.is_available():
+        raise HTTPException(
+            status_code=400,
+            detail="Apple Photos not available on this system"
+        )
+
+    try:
+        result = service.export_album(album_name, export_path, limit)
+
+        if result["status"] == "error":
+            raise HTTPException(status_code=500, detail=result["message"])
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to export album: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/apple-photos/export-recent")
+async def export_recent_apple_photos(
+    export_path: str,
+    days: int = 30,
+    limit: int = 100
+):
+    """
+    Export recent photos from Apple Photos library
+
+    Args:
+        export_path: Path to export photos to
+        days: Number of days back to search (default: 30)
+        limit: Maximum number of photos to export (default: 100)
+
+    Returns:
+        Export status and stats
+    """
+    from services.apple_photos_service import ApplePhotosService
+
+    service = ApplePhotosService()
+
+    if not service.is_available():
+        raise HTTPException(
+            status_code=400,
+            detail="Apple Photos not available on this system"
+        )
+
+    try:
+        result = service.export_recent(export_path, days, limit)
+
+        if result["status"] == "error":
+            raise HTTPException(status_code=500, detail=result["message"])
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to export recent photos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

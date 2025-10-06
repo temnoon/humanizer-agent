@@ -144,24 +144,41 @@ export default function BookSectionSelector({ message, chunks, onClose, onSucces
     setLoading(true);
     setError(null);
     try {
+      // Get existing content links to determine sequence number
+      const linksResponse = await axios.get(
+        `${API_BASE}/api/books/${selectedBook.id}/sections/${section.id}/content`
+      );
+      const existingLinks = linksResponse.data || [];
+      const nextSequenceNumber = existingLinks.length;
+
       // Create content link
       await axios.post(
         `${API_BASE}/api/books/${selectedBook.id}/sections/${section.id}/content`,
         {
           chunk_id: chunks && chunks.length > 0 ? chunks[0].id : null,
           transformation_job_id: null,
-          sequence_number: 0,
+          sequence_number: nextSequenceNumber,
           notes: `Added from message #${message.sequence_number}`
         }
       );
 
-      // Optionally: Update section content with concatenated chunks
+      // Append to section content (don't replace)
       if (chunks && chunks.length > 0) {
-        const content = chunksToMarkdown(chunks);
+        const newContent = chunksToMarkdown(chunks);
+
+        // Fetch current section to get existing content
+        const sectionResponse = await axios.get(
+          `${API_BASE}/api/books/${selectedBook.id}/sections/${section.id}`
+        );
+        const currentContent = sectionResponse.data.content || '';
+
+        // Append with separator if there's existing content
+        const separator = currentContent.trim() ? '\n\n---\n\n' : '';
+        const updatedContent = currentContent + separator + newContent;
 
         await axios.patch(
           `${API_BASE}/api/books/${selectedBook.id}/sections/${section.id}`,
-          { content }
+          { content: updatedContent }
         );
       }
 

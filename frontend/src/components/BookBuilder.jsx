@@ -13,7 +13,7 @@ import MarkdownEditor from './editors/MarkdownEditor';
  * - Link transformation results to sections
  * - Export to LaTeX/PDF (future)
  */
-export default function BookBuilder({ onSelect }) {
+export default function BookBuilder({ onSelect, onBookSelect }) {
   const [books, setBooks] = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
   const [bookHierarchy, setBookHierarchy] = useState(null);
@@ -34,19 +34,18 @@ export default function BookBuilder({ onSelect }) {
     }
   }, []);
 
-  // Load books when user is set
+  // Load books on mount (no user_id required)
   useEffect(() => {
-    if (currentUserId) {
-      loadBooks();
-    }
-  }, [currentUserId]);
+    loadBooks();
+  }, []);
 
   const loadBooks = async () => {
     setLoading(true);
     setError(null);
     try {
+      // No user_id filter - show all books (single-user mode)
       const response = await axios.get(`${API_BASE}/api/books/`, {
-        params: { user_id: currentUserId, limit: 100 }
+        params: { limit: 100 }
       });
       setBooks(response.data);
     } catch (err) {
@@ -117,6 +116,56 @@ export default function BookBuilder({ onSelect }) {
     setViewMode('editor');
   };
 
+  const handlePreviousSection = () => {
+    if (!bookHierarchy?.sections || !selectedSection) return;
+    const currentIndex = bookHierarchy.sections.findIndex(s => s.id === selectedSection.id);
+    if (currentIndex > 0) {
+      handleSelectSection(bookHierarchy.sections[currentIndex - 1]);
+    }
+  };
+
+  const handleNextSection = () => {
+    if (!bookHierarchy?.sections || !selectedSection) return;
+    const currentIndex = bookHierarchy.sections.findIndex(s => s.id === selectedSection.id);
+    if (currentIndex < bookHierarchy.sections.length - 1) {
+      handleSelectSection(bookHierarchy.sections[currentIndex + 1]);
+    }
+  };
+
+  const getCurrentSectionIndex = () => {
+    if (!bookHierarchy?.sections || !selectedSection) return -1;
+    return bookHierarchy.sections.findIndex(s => s.id === selectedSection.id);
+  };
+
+  const hasPreviousSection = () => getCurrentSectionIndex() > 0;
+  const hasNextSection = () => {
+    const index = getCurrentSectionIndex();
+    return index >= 0 && index < (bookHierarchy?.sections?.length || 0) - 1;
+  };
+
+  // Keyboard shortcuts for section navigation (Ctrl+→/←)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Only handle shortcuts when in editor mode
+      if (viewMode !== 'editor') return;
+
+      // Ctrl/Cmd + Arrow Right: Next section
+      if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowRight' && hasNextSection()) {
+        e.preventDefault();
+        handleNextSection();
+      }
+
+      // Ctrl/Cmd + Arrow Left: Previous section
+      if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowLeft' && hasPreviousSection()) {
+        e.preventDefault();
+        handlePreviousSection();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewMode, selectedSection, bookHierarchy]);
+
   const handleSaveSection = async (content) => {
     if (!selectedSection || !selectedBook) return;
 
@@ -170,7 +219,7 @@ export default function BookBuilder({ onSelect }) {
   const handleDeleteSection = async (sectionId, e) => {
     e.stopPropagation();
 
-    if (!confirm('Delete this section?')) return;
+    if (!confirm('Are you sure you want to delete this section? This cannot be undone.')) return;
 
     try {
       await axios.delete(
@@ -183,6 +232,28 @@ export default function BookBuilder({ onSelect }) {
       });
     } catch (err) {
       setError('Failed to delete section');
+      console.error(err);
+    }
+  };
+
+  const handleDeleteBook = async (bookId, e) => {
+    e.stopPropagation();
+
+    const book = books.find(b => b.id === bookId);
+    const bookTitle = book ? book.title : 'this book';
+
+    if (!confirm(`Are you sure you want to delete "${bookTitle}"?\n\nThis will permanently delete the book and all its sections. This cannot be undone.`)) return;
+
+    try {
+      await axios.delete(`${API_BASE}/api/books/${bookId}`);
+      setBooks(books.filter(b => b.id !== bookId));
+
+      // If we're viewing this book, go back to list
+      if (selectedBook === bookId) {
+        handleBackToList();
+      }
+    } catch (err) {
+      setError('Failed to delete book');
       console.error(err);
     }
   };
@@ -253,21 +324,61 @@ export default function BookBuilder({ onSelect }) {
         {loading ? (
           <div className="text-center text-gray-400 py-8">Loading...</div>
         ) : viewMode === 'editor' ? (
-          /* EDITOR VIEW */
+          /* EDITOR VIEW WITH SIDEBAR */
           selectedSection && (
-            <div className="h-full flex flex-col">
-              <div className="bg-gray-800 border border-gray-700 p-3 rounded mb-3">
-                <h3 className="font-bold">{selectedSection.title}</h3>
-                {selectedSection.section_type && (
-                  <p className="text-sm text-gray-400">{selectedSection.section_type}</p>
-                )}
+            <div className="h-full flex gap-3">
+              {/* Section Navigator Sidebar */}
+              <div className="w-64 bg-gray-800 border border-gray-700 rounded p-3 overflow-y-auto flex-shrink-0">
+                <div className="mb-4 pb-3 border-b border-gray-700">
+                  <h3 className="font-bold text-sm text-gray-400 uppercase tracking-wider">Book Outline</h3>
+                  {bookHierarchy && (
+                    <p className="text-xs text-gray-500 mt-1">{bookHierarchy.title}</p>
+                  )}
+                </div>
+
+                {/* Section List */}
+                <div className="space-y-1">
+                  {bookHierarchy?.sections?.map((section, idx) => (
+                    <div
+                      key={section.id}
+                      onClick={() => handleSelectSection(section)}
+                      className={`p-2 rounded cursor-pointer transition-colors ${
+                        section.id === selectedSection.id
+                          ? 'bg-blue-600 text-white'
+                          : 'hover:bg-gray-700 text-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium truncate">{section.title}</span>
+                        <span className="text-xs text-gray-500 ml-2">#{idx + 1}</span>
+                      </div>
+                      {section.section_type && (
+                        <span className="text-xs text-gray-500">{section.section_type}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="flex-1 bg-gray-800 rounded overflow-hidden">
-                <MarkdownEditor
-                  content={sectionContent}
-                  onSave={handleSaveSection}
-                  placeholder={`Start writing "${selectedSection.title}"...`}
-                />
+
+              {/* Editor Area */}
+              <div className="flex-1 flex flex-col min-w-0">
+                <div className="bg-gray-800 border border-gray-700 p-3 rounded mb-3">
+                  <h3 className="font-bold">{selectedSection.title}</h3>
+                  {selectedSection.section_type && (
+                    <p className="text-sm text-gray-400">{selectedSection.section_type}</p>
+                  )}
+                </div>
+                <div className="flex-1 bg-gray-800 rounded overflow-hidden">
+                  <MarkdownEditor
+                    content={sectionContent}
+                    onSave={handleSaveSection}
+                    placeholder={`Start writing "${selectedSection.title}"...`}
+                    onPreviousSection={handlePreviousSection}
+                    onNextSection={handleNextSection}
+                    hasPrevious={hasPreviousSection()}
+                    hasNext={hasNextSection()}
+                  />
+                </div>
               </div>
             </div>
           )
@@ -283,8 +394,16 @@ export default function BookBuilder({ onSelect }) {
               books.map((book) => (
                 <div
                   key={book.id}
-                  onClick={() => loadBookHierarchy(book.id)}
-                  className="bg-gray-800 border border-gray-700 p-4 rounded hover:bg-gray-750 cursor-pointer"
+                  onClick={() => {
+                    // If onBookSelect is provided, open in main pane
+                    // Otherwise, open in sidebar (legacy behavior)
+                    if (onBookSelect) {
+                      onBookSelect(book);
+                    } else {
+                      loadBookHierarchy(book.id);
+                    }
+                  }}
+                  className="bg-gray-800 border border-gray-700 p-4 rounded hover:bg-gray-750 cursor-pointer transition-colors group"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3 mb-2">
@@ -297,9 +416,18 @@ export default function BookBuilder({ onSelect }) {
                       </div>
                     </div>
 
-                    <span className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-300">
-                      {book.book_type}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-300">
+                        {book.book_type}
+                      </span>
+                      <button
+                        onClick={(e) => handleDeleteBook(book.id, e)}
+                        className="opacity-0 group-hover:opacity-100 px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs transition-opacity"
+                        title="Delete book"
+                      >
+                        🗑
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex gap-4 text-xs text-gray-500 mt-2">
@@ -316,14 +444,24 @@ export default function BookBuilder({ onSelect }) {
             <div className="space-y-4">
               {/* Book Header */}
               <div className="bg-gray-800 border border-gray-700 p-6 rounded">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-4xl">{getBookTypeIcon(bookHierarchy.book_type)}</span>
-                  <div>
-                    <h2 className="text-2xl font-bold">{bookHierarchy.title}</h2>
-                    {bookHierarchy.subtitle && (
-                      <p className="text-gray-400">{bookHierarchy.subtitle}</p>
-                    )}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-4xl">{getBookTypeIcon(bookHierarchy.book_type)}</span>
+                    <div>
+                      <h2 className="text-2xl font-bold">{bookHierarchy.title}</h2>
+                      {bookHierarchy.subtitle && (
+                        <p className="text-gray-400">{bookHierarchy.subtitle}</p>
+                      )}
+                    </div>
                   </div>
+
+                  <button
+                    onClick={(e) => handleDeleteBook(bookHierarchy.id, e)}
+                    className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm"
+                    title="Delete this book"
+                  >
+                    🗑 Delete Book
+                  </button>
                 </div>
 
                 <div className="flex gap-4 text-sm text-gray-400">
@@ -404,5 +542,6 @@ export default function BookBuilder({ onSelect }) {
 }
 
 BookBuilder.propTypes = {
-  onSelect: PropTypes.func
+  onSelect: PropTypes.func,
+  onBookSelect: PropTypes.func
 };

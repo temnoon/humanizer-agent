@@ -9,6 +9,8 @@ import TransformationPanel from './panels/TransformationPanel'
 import MadhyamakaPanel from './panels/MadhyamakaPanel'
 import ArchivePanel from './panels/ArchivePanel'
 import PipelinePanel from './panels/PipelinePanel'
+import ImageBrowser from './ImageBrowser'
+import BookViewer from './BookViewer'
 
 /**
  * Workstation - Main full-screen layout component
@@ -33,6 +35,8 @@ function Workstation() {
   const [secondaryDocument, setSecondaryDocument] = useState(null)
   const [showStyleConfig, setShowStyleConfig] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [showImageBrowser, setShowImageBrowser] = useState(false)
+  const [selectedBook, setSelectedBook] = useState(null)
 
   // Panel states
   const [activePanel, setActivePanel] = useState(null) // 'transform', 'philosophy', 'madhyamaka', 'archive'
@@ -56,6 +60,18 @@ function Workstation() {
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // Expose ImageBrowser opener to sidebar
+  useEffect(() => {
+    window.openImageBrowser = () => {
+      setShowImageBrowser(true)
+      setSelectedCollection(null)
+      setSelectedMessage(null)
+    }
+    return () => {
+      delete window.openImageBrowser
+    }
   }, [])
 
   const handleSidebarResize = (newWidth) => {
@@ -92,6 +108,12 @@ function Workstation() {
     })
   }
 
+  const handleBookSelect = (book) => {
+    setSelectedBook(book)
+    setSelectedCollection(null)
+    setShowImageBrowser(false)
+  }
+
   const handleCompareDocument = (doc) => {
     setSecondaryDocument(doc)
     setSplitView(true)
@@ -123,6 +145,7 @@ function Workstation() {
         onSessionSelect={handleSessionSelect}
         onConversationSelect={handleConversationSelect}
         onMessageSelect={handleMessageSelect}
+        onBookSelect={handleBookSelect}
         isMobile={isMobile}
         onClose={() => isMobile && setSidebarVisible(false)}
       />
@@ -147,8 +170,36 @@ function Workstation() {
           </button>
         )}
 
-        {/* Document Viewer(s) or Conversation Viewer */}
-        {selectedCollection ? (
+        {/* Document Viewer(s) or Conversation Viewer or Image Browser or Book Viewer */}
+        {selectedBook ? (
+          <div className="flex-1 h-full">
+            <BookViewer
+              bookId={selectedBook.id}
+              onClose={() => setSelectedBook(null)}
+            />
+          </div>
+        ) : showImageBrowser ? (
+          <div className="flex-1 relative">
+            <button
+              onClick={() => setShowImageBrowser(false)}
+              className="absolute top-4 right-4 z-10 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-md shadow-lg transition-colors text-sm"
+            >
+              ← Back
+            </button>
+            <ImageBrowser
+              onNavigateToConversation={(conversation) => {
+                setShowImageBrowser(false)
+                setSelectedCollection(conversation)
+                setCurrentView('library')
+              }}
+              onNavigateToTransformation={(transform) => {
+                setShowImageBrowser(false)
+                // Navigate to transformations view
+                setCurrentView('transformations')
+              }}
+            />
+          </div>
+        ) : selectedCollection ? (
           <ConversationViewer
             collection={selectedCollection}
             onBack={() => setSelectedCollection(null)}

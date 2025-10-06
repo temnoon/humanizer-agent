@@ -345,8 +345,8 @@ export default function TransformationsLibrary({ onSelect }) {
               {transformationDetail.transformations.length > 0 && (
                 <div className="bg-gray-800 border border-gray-700 p-4 rounded">
                   <h3 className="font-bold mb-3">📝 Results ({transformationDetail.transformations.length})</h3>
-                  <div className="space-y-2">
-                    {transformationDetail.transformations.slice(0, 5).map((trans, idx) => (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {transformationDetail.transformations.map((trans, idx) => (
                       <div key={trans.id} className="p-2 bg-gray-900 rounded text-sm">
                         <div className="flex justify-between items-center">
                           <span className="text-gray-400">Transformation {idx + 1}</span>
@@ -359,11 +359,6 @@ export default function TransformationsLibrary({ onSelect }) {
                         )}
                       </div>
                     ))}
-                    {transformationDetail.transformations.length > 5 && (
-                      <p className="text-xs text-gray-500 text-center">
-                        + {transformationDetail.transformations.length - 5} more
-                      </p>
-                    )}
                   </div>
                 </div>
               )}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import PropTypes from 'prop-types'
 import axios from 'axios'
 import ArchiveImporter from '../ArchiveImporter'
+import ImageUploader from '../ImageUploader'
 
 /**
  * ArchivePanel - Archive analysis and belief pattern detection
@@ -13,6 +14,7 @@ import ArchiveImporter from '../ArchiveImporter'
  */
 function ArchivePanel({ isOpen, onClose, currentDocument }) {
   const [activeTab, setActiveTab] = useState('import')  // 'import' or 'analyze'
+  const [importTab, setImportTab] = useState('chatgpt')  // 'chatgpt' or 'images'
   const [loading, setLoading] = useState(false)
   const [analysis, setAnalysis] = useState(null)
   const [error, setError] = useState(null)
@@ -88,7 +90,42 @@ function ArchivePanel({ isOpen, onClose, currentDocument }) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {activeTab === 'import' ? (
-          <ArchiveImporter />
+          <>
+            {/* Import Sub-tabs */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setImportTab('chatgpt')}
+                className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                  importTab === 'chatgpt'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                ChatGPT Archive
+              </button>
+              <button
+                onClick={() => setImportTab('images')}
+                className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                  importTab === 'images'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Images
+              </button>
+            </div>
+
+            {/* Import Content */}
+            {importTab === 'chatgpt' ? (
+              <ArchiveImporter />
+            ) : (
+              <ImageUploader
+                onUploadComplete={(result) => {
+                  console.log('Upload complete:', result);
+                }}
+              />
+            )}
+          </>
         ) : (
           <>
             <div className="text-sm text-gray-400">

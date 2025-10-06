@@ -2,7 +2,87 @@ import { useState, useEffect } from 'react'
 import PropTypes from 'prop-types'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import 'katex/dist/katex.min.css'
 import axios from 'axios'
+
+/**
+ * Shared markdown components for enhanced rendering
+ */
+const getMarkdownComponents = (customComponents = {}) => ({
+  // Code blocks with syntax highlighting
+  code: ({node, inline, className, children, ...props}) => {
+    const match = /language-(\w+)/.exec(className || '');
+    return !inline && match ? (
+      <div className="my-4 overflow-x-auto max-w-full">
+        <SyntaxHighlighter
+          language={match[1]}
+          style={vscDarkPlus}
+          PreTag="div"
+          showLineNumbers={true}
+          wrapLines={false}
+          wrapLongLines={false}
+          customStyle={{
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
+            margin: 0,
+            maxWidth: '100%',
+            overflowX: 'auto'
+          }}
+          codeTagProps={{
+            style: {
+              whiteSpace: 'pre',
+              overflowWrap: 'normal',
+              wordBreak: 'normal'
+            }
+          }}
+          {...props}
+        >
+          {String(children).replace(/\n$/, '')}
+        </SyntaxHighlighter>
+      </div>
+    ) : (
+      <code className="bg-gray-900 px-1.5 py-0.5 rounded text-sm text-blue-300" {...props}>
+        {children}
+      </code>
+    );
+  },
+  // Enhanced table styling
+  table: ({children}) => (
+    <div className="my-6 overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-700 border border-gray-700">
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({children}) => <thead className="bg-gray-800">{children}</thead>,
+  tbody: ({children}) => <tbody className="divide-y divide-gray-700 bg-gray-900">{children}</tbody>,
+  tr: ({children}) => <tr>{children}</tr>,
+  th: ({children}) => (
+    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+      {children}
+    </th>
+  ),
+  td: ({children}) => (
+    <td className="px-4 py-3 text-sm text-gray-300">
+      {children}
+    </td>
+  ),
+  // Images with better styling
+  img: ({node, src, alt, ...props}) => (
+    <img
+      src={src}
+      alt={alt || 'Image'}
+      className="max-w-full h-auto rounded-lg border border-gray-700 my-4 cursor-pointer hover:border-blue-500 transition-colors"
+      loading="lazy"
+      {...props}
+    />
+  ),
+  ...customComponents
+});
 
 /**
  * ResultsModal - Display transformation job results
@@ -17,8 +97,19 @@ function ResultsModal({ job, onClose }) {
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [copiedIndex, setCopiedIndex] = useState(null)
 
   const API_BASE = 'http://localhost:8000'
+
+  const handleCopyToClipboard = async (text, index) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedIndex(index)
+      setTimeout(() => setCopiedIndex(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
 
   useEffect(() => {
     if (job) {
@@ -48,7 +139,20 @@ function ResultsModal({ job, onClose }) {
           <div key={idx} className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="text-xs text-gray-400 mb-4 flex justify-between items-center pb-3 border-b border-gray-700">
               <span className="font-semibold">Transformation Result #{idx + 1}</span>
-              <span className="text-gray-500">{result.tokens_used} tokens • {result.processing_time_ms}ms</span>
+              <div className="flex items-center gap-3">
+                <span className="text-gray-500">{result.tokens_used} tokens • {result.processing_time_ms}ms</span>
+                <button
+                  onClick={() => handleCopyToClipboard(result.content, idx)}
+                  className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors flex items-center gap-1"
+                  title="Copy to clipboard"
+                >
+                  {copiedIndex === idx ? (
+                    <>✓ Copied</>
+                  ) : (
+                    <>📋 Copy</>
+                  )}
+                </button>
+              </div>
             </div>
             <div className="prose prose-invert prose-lg max-w-none
                           prose-headings:font-bold prose-headings:tracking-tight
@@ -63,23 +167,16 @@ function ResultsModal({ job, onClose }) {
                           prose-code:bg-gray-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
                           prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700">
               <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  // Ensure paragraphs have proper spacing
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={getMarkdownComponents({
                   p: ({children}) => <p className="mb-4 leading-relaxed">{children}</p>,
-                  // Style headings
                   h1: ({children}) => <h1 className="text-3xl font-bold mb-4 mt-6 text-white">{children}</h1>,
                   h2: ({children}) => <h2 className="text-2xl font-bold mb-3 mt-5 text-white">{children}</h2>,
                   h3: ({children}) => <h3 className="text-xl font-semibold mb-2 mt-4 text-gray-100">{children}</h3>,
-                  // Style lists
                   ul: ({children}) => <ul className="my-4 space-y-2 list-disc pl-6">{children}</ul>,
-                  ol: ({children}) => <ol className="my-4 space-y-2 list-decimal pl-6">{children}</ol>,
-                  // Style code blocks
-                  code: ({inline, children}) =>
-                    inline
-                      ? <code className="bg-gray-900 px-1.5 py-0.5 rounded text-sm text-blue-300">{children}</code>
-                      : <code className="block bg-gray-900 p-3 rounded border border-gray-700 text-sm">{children}</code>
-                }}
+                  ol: ({children}) => <ol className="my-4 space-y-2 list-decimal pl-6">{children}</ol>
+                })}
               >
                 {result.content}
               </ReactMarkdown>
@@ -220,7 +317,20 @@ function ResultsModal({ job, onClose }) {
           <div key={idx} className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="text-xs text-gray-400 mb-4 flex justify-between items-center pb-3 border-b border-gray-700">
               <span className="font-semibold">Middle Path Transformation #{idx + 1}</span>
-              <span className="text-gray-500">{result.tokens_used || 0} tokens • {result.processing_time_ms || 0}ms</span>
+              <div className="flex items-center gap-3">
+                <span className="text-gray-500">{result.tokens_used || 0} tokens • {result.processing_time_ms || 0}ms</span>
+                <button
+                  onClick={() => handleCopyToClipboard(result.content, `madhyamaka-${idx}`)}
+                  className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors flex items-center gap-1"
+                  title="Copy to clipboard"
+                >
+                  {copiedIndex === `madhyamaka-${idx}` ? (
+                    <>✓ Copied</>
+                  ) : (
+                    <>📋 Copy</>
+                  )}
+                </button>
+              </div>
             </div>
             <div className="prose prose-invert prose-lg max-w-none
                           prose-headings:font-bold prose-headings:tracking-tight
@@ -236,11 +346,10 @@ function ResultsModal({ job, onClose }) {
                           prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700
                           prose-strong:text-green-400">
               <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  // Ensure paragraphs have proper spacing
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={getMarkdownComponents({
                   p: ({children}) => <p className="mb-4 leading-relaxed">{children}</p>,
-                  // Style headings - H2 for alternatives with green left border
                   h1: ({children}) => <h1 className="text-3xl font-bold mb-4 mt-6 text-white">{children}</h1>,
                   h2: ({children}) => (
                     <h2 className="text-2xl font-bold mb-3 mt-6 pt-4 text-white border-l-4 border-green-500 pl-4 bg-gray-900/50 py-2 rounded-r">
@@ -248,21 +357,12 @@ function ResultsModal({ job, onClose }) {
                     </h2>
                   ),
                   h3: ({children}) => <h3 className="text-xl font-semibold mb-2 mt-4 text-gray-100">{children}</h3>,
-                  // Style lists
                   ul: ({children}) => <ul className="my-4 space-y-2 list-disc pl-6">{children}</ul>,
                   ol: ({children}) => <ol className="my-4 space-y-2 list-decimal pl-6">{children}</ol>,
-                  // Style code blocks
-                  code: ({inline, children}) =>
-                    inline
-                      ? <code className="bg-gray-900 px-1.5 py-0.5 rounded text-sm text-blue-300">{children}</code>
-                      : <code className="block bg-gray-900 p-3 rounded border border-gray-700 text-sm">{children}</code>,
-                  // Style bold text (for "Improvements:", "Type:", etc.) in green
                   strong: ({children}) => <strong className="text-green-400 font-semibold">{children}</strong>,
-                  // Style em (for notes) in italic gray
                   em: ({children}) => <em className="text-gray-400 italic">{children}</em>,
-                  // Style horizontal rules
                   hr: () => <hr className="my-6 border-gray-700" />
-                }}
+                })}
               >
                 {result.content}
               </ReactMarkdown>
@@ -288,7 +388,20 @@ function ResultsModal({ job, onClose }) {
                   <span className="font-semibold">Multi-Perspective Analysis #{idx + 1}</span>
                   <span className="ml-3 text-gray-500">{numPerspectives} perspectives</span>
                 </div>
-                <span className="text-gray-500">{result.tokens_used} tokens • {result.processing_time_ms}ms</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-500">{result.tokens_used} tokens • {result.processing_time_ms}ms</span>
+                  <button
+                    onClick={() => handleCopyToClipboard(result.content, `perspective-${idx}`)}
+                    className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors flex items-center gap-1"
+                    title="Copy to clipboard"
+                  >
+                    {copiedIndex === `perspective-${idx}` ? (
+                      <>✓ Copied</>
+                    ) : (
+                      <>📋 Copy</>
+                    )}
+                  </button>
+                </div>
               </div>
               <div className="prose prose-invert prose-lg max-w-none
                             prose-headings:font-bold prose-headings:tracking-tight
@@ -303,11 +416,10 @@ function ResultsModal({ job, onClose }) {
                             prose-code:bg-gray-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
                             prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700">
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    // Ensure paragraphs have proper spacing
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                  components={getMarkdownComponents({
                     p: ({children}) => <p className="mb-4 leading-relaxed">{children}</p>,
-                    // Style headings - H2 for perspectives with blue left border
                     h1: ({children}) => <h1 className="text-3xl font-bold mb-4 mt-6 text-white">{children}</h1>,
                     h2: ({children}) => (
                       <h2 className="text-2xl font-bold mb-3 mt-6 pt-4 text-white border-l-4 border-blue-500 pl-4 bg-gray-900/50 py-2 rounded-r">
@@ -315,15 +427,9 @@ function ResultsModal({ job, onClose }) {
                       </h2>
                     ),
                     h3: ({children}) => <h3 className="text-xl font-semibold mb-2 mt-4 text-gray-100">{children}</h3>,
-                    // Style lists
                     ul: ({children}) => <ul className="my-4 space-y-2 list-disc pl-6">{children}</ul>,
-                    ol: ({children}) => <ol className="my-4 space-y-2 list-decimal pl-6">{children}</ol>,
-                    // Style code blocks
-                    code: ({inline, children}) =>
-                      inline
-                        ? <code className="bg-gray-900 px-1.5 py-0.5 rounded text-sm text-blue-300">{children}</code>
-                        : <code className="block bg-gray-900 p-3 rounded border border-gray-700 text-sm">{children}</code>
-                  }}
+                    ol: ({children}) => <ol className="my-4 space-y-2 list-decimal pl-6">{children}</ol>
+                  })}
                 >
                   {result.content}
                 </ReactMarkdown>

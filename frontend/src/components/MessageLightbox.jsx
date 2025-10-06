@@ -525,7 +525,17 @@ export default function MessageLightbox({ message, messages, onNavigate, onClose
                   },
                   // Custom styling for paragraphs
                   p({ node, children, ...props }) {
-                    return (
+                    // Check if children contain block elements (like pre, table, div)
+                    // If so, render as div to avoid invalid nesting
+                    const hasBlockChild = node?.children?.some(child =>
+                      child.type === 'element' && ['pre', 'table', 'div', 'blockquote'].includes(child.tagName)
+                    );
+
+                    return hasBlockChild ? (
+                      <div className="text-gray-200 leading-relaxed mb-4" {...props}>
+                        {children}
+                      </div>
+                    ) : (
                       <p className="text-gray-200 leading-relaxed mb-4" {...props}>
                         {children}
                       </p>

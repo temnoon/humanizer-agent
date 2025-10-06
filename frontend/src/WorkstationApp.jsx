@@ -1,5 +1,5 @@
 import Workstation from './components/Workstation'
-import './styles/workstation.scss'
+import './styles/workstation.css'
 
 /**
  * WorkstationApp - Main application wrapper for the Workstation

@@ -137,20 +137,33 @@ function DocumentViewer({
 
     if (type === 'code') {
       return (
-        <SyntaxHighlighter
-          language={language}
-          style={vscDarkPlus}
-          customStyle={{
-            margin: 0,
-            padding: '1.5rem',
-            background: 'transparent',
-            fontSize: '0.9rem',
-            lineHeight: '1.6'
-          }}
-          showLineNumbers={true}
-        >
-          {content}
-        </SyntaxHighlighter>
+        <div className="overflow-x-auto max-w-full">
+          <SyntaxHighlighter
+            language={language}
+            style={vscDarkPlus}
+            customStyle={{
+              margin: 0,
+              padding: '1.5rem',
+              background: 'transparent',
+              fontSize: '0.9rem',
+              lineHeight: '1.6',
+              maxWidth: '100%',
+              overflowX: 'auto'
+            }}
+            codeTagProps={{
+              style: {
+                whiteSpace: 'pre',
+                overflowWrap: 'normal',
+                wordBreak: 'normal'
+              }
+            }}
+            showLineNumbers={true}
+            wrapLines={false}
+            wrapLongLines={false}
+          >
+            {content}
+          </SyntaxHighlighter>
+        </div>
       )
     }
 
@@ -164,14 +177,33 @@ function DocumentViewer({
               code({ node, inline, className, children, ...props }) {
                 const match = /language-(\w+)/.exec(className || '')
                 return !inline && match ? (
-                  <SyntaxHighlighter
-                    language={match[1]}
-                    style={vscDarkPlus}
-                    PreTag="div"
-                    {...props}
-                  >
-                    {String(children).replace(/\n$/, '')}
-                  </SyntaxHighlighter>
+                  <div className="my-4 overflow-x-auto max-w-full">
+                    <SyntaxHighlighter
+                      language={match[1]}
+                      style={vscDarkPlus}
+                      PreTag="div"
+                      showLineNumbers={true}
+                      wrapLines={false}
+                      wrapLongLines={false}
+                      customStyle={{
+                        borderRadius: '0.375rem',
+                        fontSize: '0.875rem',
+                        margin: 0,
+                        maxWidth: '100%',
+                        overflowX: 'auto'
+                      }}
+                      codeTagProps={{
+                        style: {
+                          whiteSpace: 'pre',
+                          overflowWrap: 'normal',
+                          wordBreak: 'normal'
+                        }
+                      }}
+                      {...props}
+                    >
+                      {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                  </div>
                 ) : (
                   <code className={className} {...props}>
                     {children}
