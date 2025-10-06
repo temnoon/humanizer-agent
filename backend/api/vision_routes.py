@@ -20,10 +20,14 @@ from database.connection import get_db
 from models.chunk_models import Chunk, Media, Message
 from models.pipeline_models import TransformationJob
 from services.vision_service import VisionService
+from services.image_metadata import ImageMetadataExtractor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/vision", tags=["vision"])
+
+# Initialize metadata extractor
+metadata_extractor = ImageMetadataExtractor()
 
 
 # ============================================================================
@@ -122,9 +126,29 @@ async def upload_image(
         # Get file size
         file_size = storage_path.stat().st_size
 
-        # TODO: Extract image dimensions (requires PIL/Pillow)
-        # For now, set to None
-        width, height = None, None
+        # Extract metadata using PIL/Pillow
+        image_metadata = metadata_extractor.extract_all_metadata(str(storage_path))
+
+        # Get dimensions
+        dimensions = image_metadata.get("dimensions", {})
+        width = dimensions.get("width")
+        height = dimensions.get("height")
+
+        # Build extra_metadata with all extracted data
+        extra_metadata = {
+            "uploaded_by": user_id,
+            "format": image_metadata.get("format"),
+            "mode": image_metadata.get("mode"),
+            "exif": image_metadata.get("exif", {}),
+            "ai_metadata": image_metadata.get("ai_metadata", {}),
+            "created_date": image_metadata.get("created_date"),
+            "camera": image_metadata.get("camera")
+        }
+
+        # Extract prompt if present
+        ai_meta = image_metadata.get("ai_metadata", {})
+        prompt = ai_meta.get("prompt")
+        generator = ai_meta.get("generator")
 
         # Create media record
         media = Media(
@@ -136,8 +160,8 @@ async def upload_image(
             original_filename=file.filename,
             width=width,
             height=height,
-            platform="upload",
-            extra_metadata={"uploaded_by": user_id}
+            platform=generator or "upload",  # Use generator if detected, else "upload"
+            extra_metadata=extra_metadata
         )
         db.add(media)
 
@@ -178,12 +202,100 @@ async def upload_image(
             "storage_path": str(storage_path),
             "thumbnail_url": f"/api/library/media/{file_id}",
             "file_size": file_size,
-            "content_type": file.content_type
+            "content_type": file.content_type,
+            "width": width,
+            "height": height,
+            "prompt": prompt,  # AI generation prompt if detected
+            "generator": generator,  # AI generator if detected
+            "has_metadata": len(extra_metadata.get("exif", {})) > 0
         }
 
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@router.post("/upload-bulk", status_code=201)
+async def upload_bulk_images(
+    files: list[UploadFile] = File(...),
+    user_id: str = Form(...),
+    collection_id: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Upload multiple images at once (folder import support).
+
+    Args:
+        files: List of image files
+        user_id: User ID
+        collection_id: Optional collection to link all images to
+        db: Database session
+
+    Returns:
+        {
+            "uploaded": [...],
+            "failed": [...],
+            "total": int,
+            "success_count": int,
+            "fail_count": int
+        }
+    """
+    results = {"uploaded": [], "failed": [], "total": len(files), "success_count": 0, "fail_count": 0}
+
+    for file in files:
+        try:
+            # Call single upload logic (reuse the upload endpoint logic)
+            # For now, process inline
+            file_id = f"file-{uuid4().hex[:24]}"
+            ext_map = {'image/png': '.png', 'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif'}
+            ext = ext_map.get(file.content_type, '.png')
+
+            upload_dir = Path("backend/media/uploads")
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            storage_path = upload_dir / f"{file_id}{ext}"
+
+            with open(storage_path, 'wb') as f:
+                shutil.copyfileobj(file.file, f)
+
+            file_size = storage_path.stat().st_size
+            image_metadata = metadata_extractor.extract_all_metadata(str(storage_path))
+            dimensions = image_metadata.get("dimensions", {})
+            width, height = dimensions.get("width"), dimensions.get("height")
+
+            extra_metadata = {
+                "uploaded_by": user_id,
+                "format": image_metadata.get("format"),
+                "ai_metadata": image_metadata.get("ai_metadata", {}),
+                "exif": image_metadata.get("exif", {})
+            }
+
+            ai_meta = image_metadata.get("ai_metadata", {})
+            prompt = ai_meta.get("prompt")
+            generator = ai_meta.get("generator")
+
+            media = Media(
+                id=uuid4(), original_media_id=file_id, storage_path=str(storage_path),
+                mime_type=file.content_type, file_size_bytes=file_size,
+                original_filename=file.filename, width=width, height=height,
+                platform=generator or "upload", extra_metadata=extra_metadata
+            )
+            db.add(media)
+
+            chunk_content = {"content_type": "image_asset_pointer", "asset_pointer": f"file-service://{file_id}", "size_bytes": file_size, "width": width, "height": height}
+            chunk = Chunk(id=uuid4(), collection_id=UUID(collection_id) if collection_id else None, chunk_type="image", content=str(chunk_content), chunk_sequence=0)
+            db.add(chunk)
+
+            await db.commit()
+
+            results["uploaded"].append({"media_id": file_id, "filename": file.filename, "prompt": prompt, "generator": generator})
+            results["success_count"] += 1
+
+        except Exception as e:
+            results["failed"].append({"filename": file.filename, "error": str(e)})
+            results["fail_count"] += 1
+            logger.error(f"Failed to upload {file.filename}: {e}")
+
+    return results
 
 
 # ============================================================================
