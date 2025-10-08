@@ -13,6 +13,44 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import ContentCard from '../ContentCard';
 
 /**
+ * Preprocess content for rendering: images and LaTeX
+ * - Converts image_asset_pointer JSON to markdown images
+ * - Converts LaTeX delimiters: \[...\] to $$...$$ and \(...\) to $...$
+ */
+const preprocessContent = (text) => {
+  if (!text) return '';
+
+  let processed = text;
+
+  // STEP 1: Convert image metadata dictionaries to markdown images
+  // Pattern matches: {'content_type': 'image_asset_pointer', 'asset_pointer': '(protocol)://(id)', ...}
+  // Supports: file-service://, sediment://, and future protocols
+  const imageMetadataPattern = /\{'content_type':\s*'image_asset_pointer',\s*'asset_pointer':\s*'(?:file-service|sediment|[a-z-]+):\/\/([^']+)'[^}]*\}/g;
+
+  processed = processed.replace(imageMetadataPattern, (match, assetId) => {
+    // Normalize ID format to match database storage (file-XXXXX with dashes)
+    // Only replace the prefix: file_ → file- (not all underscores)
+    const mediaId = assetId.replace(/^file_/, 'file-');
+    const imageUrl = `http://localhost:8000/api/library/media/${mediaId}/file`;
+
+    // Generate markdown image with alt text
+    return `\n\n![Image](${imageUrl})\n\n`;
+  });
+
+  // STEP 2: Convert LaTeX display math \[ ... \] to $$...$$
+  processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, (match, math) => {
+    return '\n$$' + math.trim() + '$$\n';
+  });
+
+  // STEP 3: Convert LaTeX inline math \( ... \) to $...$
+  processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (match, math) => {
+    return '$' + math.trim() + '$';
+  });
+
+  return processed;
+};
+
+/**
  * MarkdownEditor Component
  *
  * Split-pane markdown editor with live preview.
@@ -22,6 +60,7 @@ import ContentCard from '../ContentCard';
  * - Auto-save on blur or Ctrl+S
  * - Syntax highlighting
  * - Unsaved changes indicator
+ * - LaTeX math rendering (converts \[...\] and \(...\) to KaTeX format)
  */
 export default function MarkdownEditor({
   content,
@@ -40,6 +79,41 @@ export default function MarkdownEditor({
   const [editorContent, setEditorContent] = useState(content || '');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Load persisted split sizes from localStorage
+  const [editorSize, setEditorSize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('markdownEditor-splitSizes');
+      return saved ? JSON.parse(saved).editor : 50;
+    } catch {
+      return 50;
+    }
+  });
+
+  const [previewSize, setPreviewSize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('markdownEditor-splitSizes');
+      return saved ? JSON.parse(saved).preview : 50;
+    } catch {
+      return 50;
+    }
+  });
+
+  // Save split sizes to localStorage when they change
+  const handleLayoutChange = (sizes) => {
+    if (sizes && sizes.length === 2) {
+      setEditorSize(sizes[0]);
+      setPreviewSize(sizes[1]);
+      try {
+        localStorage.setItem('markdownEditor-splitSizes', JSON.stringify({
+          editor: sizes[0],
+          preview: sizes[1]
+        }));
+      } catch (err) {
+        console.error('Failed to save split sizes:', err);
+      }
+    }
+  };
 
   // Concatenate content links + inline content for preview
   const getFullContent = useCallback(() => {
@@ -61,7 +135,8 @@ export default function MarkdownEditor({
       parts.push(editorContent);
     }
 
-    return parts.join('');
+    // Preprocess content (images + LaTeX)
+    return preprocessContent(parts.join(''));
   }, [contentLinks, editorContent]);
 
   // Update editor when content prop changes
@@ -174,9 +249,9 @@ export default function MarkdownEditor({
 
       {/* Editor and Preview Panes */}
       <div className="flex-1 flex overflow-hidden">
-        <PanelGroup direction="horizontal">
+        <PanelGroup direction="horizontal" onLayout={handleLayoutChange}>
           {/* Left Pane: Editor with Content Cards */}
-          <Panel defaultSize={50} minSize={25} maxSize={75}>
+          <Panel defaultSize={editorSize} minSize={25} maxSize={75}>
             <div className="h-full border-r border-gray-700 overflow-hidden flex flex-col">
           <div className="bg-gray-850 px-3 py-1 border-b border-gray-700">
             <span className="text-xs text-gray-400 font-medium">Editor</span>
@@ -246,10 +321,10 @@ export default function MarkdownEditor({
             </div>
           </Panel>
 
-          <PanelResizeHandle className="w-1 hover:w-2 bg-gray-800 hover:bg-realm-symbolic transition-all cursor-col-resize active:bg-realm-symbolic-light" />
+          <PanelResizeHandle className="w-2 bg-gray-700 hover:bg-realm-symbolic transition-colors cursor-col-resize active:bg-realm-symbolic-light" />
 
           {/* Right Pane: Preview */}
-          <Panel defaultSize={50} minSize={25} maxSize={75}>
+          <Panel defaultSize={previewSize} minSize={25} maxSize={75}>
             <div className="h-full overflow-hidden flex flex-col bg-gray-900">
           <div className="bg-gray-850 px-3 py-1 border-b border-gray-700">
             <span className="text-xs text-gray-400 font-medium">Preview</span>

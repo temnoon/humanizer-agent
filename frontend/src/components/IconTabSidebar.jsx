@@ -183,8 +183,8 @@ function IconTabSidebar({
 
   return (
     <aside
-      className="fixed left-0 top-0 h-full bg-gray-900 border-r border-gray-800 flex z-30"
-      style={{ width: `${width}px` }}
+      data-testid="sidebar"
+      className="h-full bg-gray-900 border-r border-gray-800 flex"
     >
       {/* Icon Tab Bar */}
       <div className="w-14 bg-gray-950 border-r border-gray-800 flex flex-col items-center py-4 space-y-2">

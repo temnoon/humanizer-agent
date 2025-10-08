@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import PropTypes from 'prop-types';
-import MessageLightbox from './MessageLightbox';
+import { useWorkspace } from '../contexts/WorkspaceContext';
+import { useListNavigation } from '../hooks/useListNavigation';
 import PipelinePanel from './panels/PipelinePanel';
 import BookSectionSelector from './modals/BookSectionSelector';
 
@@ -15,6 +16,7 @@ import BookSectionSelector from './modals/BookSectionSelector';
  * - Navigation and search within conversation
  */
 export default function ConversationViewer({ collection, onBack }) {
+  const { showInspector, addTab } = useWorkspace();
   const [conversationData, setConversationData] = useState(null);
   const [gizmoMappings, setGizmoMappings] = useState({});
   const [gizmoInfo, setGizmoInfo] = useState([]);
@@ -24,7 +26,6 @@ export default function ConversationViewer({ collection, onBack }) {
   const [error, setError] = useState(null);
   const [userId, setUserId] = useState(null);
   const [showMetadata, setShowMetadata] = useState(true);
-  const [lightboxMessage, setLightboxMessage] = useState(null);
   const [showSystemMessages, setShowSystemMessages] = useState(false);
   const [expandedToolMessages, setExpandedToolMessages] = useState(new Set());
   const [showPipelinePanel, setShowPipelinePanel] = useState(false);
@@ -45,6 +46,7 @@ export default function ConversationViewer({ collection, onBack }) {
       loadGizmoMappings();
       loadGizmoInfo();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection, userId]);
 
   const loadConversation = async () => {
@@ -187,20 +189,44 @@ export default function ConversationViewer({ collection, onBack }) {
     // Optionally show success message
   };
 
-  const shouldShowMessage = (message) => {
-    // Always show user and assistant messages
-    if (message.role === 'user' || message.role === 'assistant') {
-      return true;
-    }
-
-    // Show system/tool messages only if toggle is on
-    return showSystemMessages;
-  };
-
-  const getFilteredMessages = () => {
+  // Filter and navigation helpers (must be at top level for hooks)
+  // Memoize filtered messages to prevent hook order issues
+  const filteredMessages = useMemo(() => {
+    const messages = conversationData?.messages;
     if (!messages) return [];
-    return messages.filter(shouldShowMessage);
-  };
+
+    return messages.filter((message) => {
+      // Always show user and assistant messages
+      if (message.role === 'user' || message.role === 'assistant') {
+        return true;
+      }
+      // Show system/tool messages only if toggle is on
+      return showSystemMessages;
+    });
+  }, [conversationData?.messages, showSystemMessages]);
+
+  // Memoize onSelect callback
+  const handleMessageSelect = useCallback((message, index) => {
+    // Scroll to message when navigating
+    const element = document.getElementById(`message-${message.id}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
+  // Message navigation (hook must be called unconditionally BEFORE any returns)
+  const {
+    currentIndex,
+    setCurrentIndex,
+    handlePrev,
+    handleNext,
+    hasPrev,
+    hasNext
+  } = useListNavigation({
+    items: filteredMessages,
+    onSelect: handleMessageSelect,
+    enabled: !loading && !error && !!conversationData
+  });
 
   /**
    * Parse message content and extract renderable elements
@@ -235,10 +261,13 @@ export default function ConversationViewer({ collection, onBack }) {
 
     // PRIORITY 2: Check for Python dict representation of image_asset_pointer
     if (content.includes("'image_asset_pointer'") && content.includes("'asset_pointer'")) {
-      // Extract file ID using regex
-      const match = content.match(/['"]asset_pointer['"]\s*:\s*['"]file-service:\/\/([^'"]+)['"]/);
+      // Extract file ID using regex - supports file-service://, sediment://, and future protocols
+      const match = content.match(/['"]asset_pointer['"]\s*:\s*['"](?:file-service|sediment|[a-z-]+):\/\/([^'"]+)['"]/);
       if (match) {
-        const fileId = match[1];
+        const assetId = match[1];
+        // Normalize ID format to match database storage (file-XXXXX with dashes)
+        // Only replace the prefix: file_ → file- (not all underscores)
+        const fileId = assetId.replace(/^file_/, 'file-');
         return {
           type: 'image',
           url: `http://localhost:8000/api/library/media/${fileId}/file`,
@@ -260,10 +289,14 @@ export default function ConversationViewer({ collection, onBack }) {
 
     // Check if it's an image_asset_pointer JSON
     if (parsed.content_type === 'image_asset_pointer' && parsed.asset_pointer) {
-      const fileId = parsed.asset_pointer.replace(/^file-service:\/\//, '').replace(/^file-/, '');
+      // Remove protocol prefix (file-service://, sediment://, etc.) and extract ID
+      const assetId = parsed.asset_pointer.replace(/^(?:file-service|sediment|[a-z-]+):\/\//, '');
+      // Normalize ID format to match database storage (file-XXXXX with dashes)
+      // Only replace the prefix: file_ → file- (not all underscores)
+      const fileId = assetId.replace(/^file_/, 'file-');
       return {
         type: 'image',
-        url: `http://localhost:8000/api/library/media/file-${fileId}/file`,
+        url: `http://localhost:8000/api/library/media/${fileId}/file`,
         width: parsed.width,
         height: parsed.height,
         size: parsed.size_bytes
@@ -517,16 +550,58 @@ export default function ConversationViewer({ collection, onBack }) {
 
         {/* Messages List */}
         <div className="max-w-4xl mx-auto p-8 space-y-4">
-          <h2 className="text-xl font-bold mb-4">
-            Messages
-            <span className="text-sm text-gray-400 ml-3 font-normal">
-              ({getFilteredMessages().length} of {messages.length} shown)
-            </span>
-          </h2>
-          {getFilteredMessages().map((message, index) => (
+          {/* Messages Header with Navigation */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">
+              Messages
+              <span className="text-sm text-gray-400 ml-3 font-normal">
+                ({filteredMessages.length} of {messages.length} shown)
+              </span>
+            </h2>
+
+            {/* Navigation Controls */}
+            {filteredMessages.length > 1 && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-400">
+                  {currentIndex + 1} of {filteredMessages.length}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={handlePrev}
+                    disabled={!hasPrev}
+                    className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 rounded text-sm flex items-center gap-1 transition-colors"
+                    title="Previous message (↑)"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Prev
+                  </button>
+                  <button
+                    onClick={handleNext}
+                    disabled={!hasNext}
+                    className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 rounded text-sm flex items-center gap-1 transition-colors"
+                    title="Next message (↓)"
+                  >
+                    Next
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {filteredMessages.map((message, index) => (
             <div
               key={message.id}
-              className="bg-gray-900 border border-gray-800 rounded-lg p-4"
+              id={`message-${message.id}`}
+              className={`bg-gray-900 border rounded-lg p-4 transition-colors ${
+                index === currentIndex
+                  ? 'border-realm-symbolic ring-2 ring-realm-symbolic/30'
+                  : 'border-gray-800'
+              }`}
             >
               <div className="flex items-start gap-3 mb-3">
                 <span className="text-2xl">{getRoleIcon(message.role)}</span>
@@ -693,34 +768,66 @@ export default function ConversationViewer({ collection, onBack }) {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => setLightboxMessage(message)}
-                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm transition-colors flex items-center gap-2"
-                  title="View full message"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  View
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      // Fetch message chunks to get full content
+                      try {
+                        const response = await axios.get(`/api/library/messages/${message.id}/chunks`);
+                        const chunks = response.data;
+                        const fullContent = chunks.map(c => c.content).join('\n\n');
+
+                        // Open as full-page markdown editor tab
+                        addTab('markdownEditor', `Message #${message.sequence_number}`, {
+                          content: fullContent,
+                          metadata: {
+                            platform: conversationData?.collection?.source_platform,
+                            date: message.timestamp || message.created_at,
+                            wordCount: fullContent.split(/\s+/).length,
+                            tokens: message.token_count,
+                            role: message.role,
+                            messageId: message.id
+                          },
+                          readOnly: true // Messages are read-only for now
+                        });
+                      } catch (err) {
+                        console.error('Failed to load message content:', err);
+                      }
+                    }}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm transition-colors flex items-center gap-2"
+                    title="View full message"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    View
+                  </button>
+                  <button
+                    onClick={async () => {
+                      // Fetch chunks and trigger add to book
+                      try {
+                        const response = await axios.get(`/api/library/messages/${message.id}/chunks`);
+                        const chunks = response.data;
+                        handleAddToBook(message, chunks);
+                      } catch (err) {
+                        console.error('Failed to load message chunks:', err);
+                      }
+                    }}
+                    className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm transition-colors flex items-center gap-2"
+                    title="Add to book"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                    Add to Book
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       </div>
-
-      {/* Message Lightbox */}
-      {lightboxMessage && (
-        <MessageLightbox
-          message={lightboxMessage}
-          messages={getFilteredMessages()}
-          onNavigate={(newMessage) => setLightboxMessage(newMessage)}
-          onClose={() => setLightboxMessage(null)}
-          onPipelineOpen={handlePipelineOpen}
-          onAddToBook={handleAddToBook}
-        />
-      )}
 
       {/* Pipeline Panel */}
       <PipelinePanel

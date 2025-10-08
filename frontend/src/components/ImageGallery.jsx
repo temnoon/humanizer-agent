@@ -5,13 +5,12 @@ import PropTypes from 'prop-types';
 /**
  * ImageGallery Component
  *
- * Browse all images in the system or filter by collection.
+ * Sidebar image browser with thumbnail grid.
  * Features:
  * - Grid view with thumbnails
- * - Filter by collection, generator, date
- * - View metadata (AI prompts, EXIF, dimensions)
- * - Full-size lightbox viewer
+ * - Filter by collection, generator
  * - Search by filename or prompt
+ * - Click to open full ImageBrowser in main pane
  */
 export default function ImageGallery({ selectedCollection = null }) {
   const [images, setImages] = useState([]);
@@ -19,8 +18,9 @@ export default function ImageGallery({ selectedCollection = null }) {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterGenerator, setFilterGenerator] = useState('all');
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [showLightbox, setShowLightbox] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [itemsPerPage] = useState(100); // Reasonable for sidebar
 
   const API_BASE = 'http://localhost:8000';
 
@@ -29,27 +29,34 @@ export default function ImageGallery({ selectedCollection = null }) {
 
   useEffect(() => {
     loadImages();
-  }, [selectedCollection]);
+  }, [selectedCollection, currentPage, searchQuery, filterGenerator]);
 
   const loadImages = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const params = {};
+      const params = {
+        limit: itemsPerPage,
+        offset: (currentPage - 1) * itemsPerPage
+      };
+
       if (selectedCollection) {
         params.collection_id = selectedCollection.id;
       }
 
-      const response = await axios.get(`${API_BASE}/api/library/media`, {
-        params: {
-          limit: 500,
-          offset: 0,
-          ...params
-        }
-      });
+      if (searchQuery) {
+        params.search = searchQuery;
+      }
+
+      if (filterGenerator !== 'all') {
+        params.generator = filterGenerator;
+      }
+
+      const response = await axios.get(`${API_BASE}/api/library/media`, { params });
 
       setImages(response.data.media || []);
+      setTotalCount(response.data.total || 0);
     } catch (err) {
       console.error('Failed to load images:', err);
       setError('Failed to load images: ' + (err.response?.data?.detail || err.message));
@@ -89,14 +96,12 @@ export default function ImageGallery({ selectedCollection = null }) {
     return filtered;
   };
 
-  const openLightbox = (image) => {
-    setSelectedImage(image);
-    setShowLightbox(true);
-  };
-
-  const closeLightbox = () => {
-    setShowLightbox(false);
-    setSelectedImage(null);
+  const handleImageClick = (image) => {
+    // Signal to parent to open ImageBrowser in main pane
+    // The parent (Workstation or IconTabSidebar) should handle this
+    if (window.openImageBrowser) {
+      window.openImageBrowser(image.id);
+    }
   };
 
   const filteredImages = filterImages();
@@ -139,9 +144,30 @@ export default function ImageGallery({ selectedCollection = null }) {
           </select>
         </div>
 
-        {/* Stats */}
-        <div className="text-xs text-gray-400">
-          {filteredImages.length} of {images.length} images
+        {/* Stats and Pagination */}
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <span>{totalCount} total images</span>
+          {Math.ceil(totalCount / itemsPerPage) > 1 && (
+            <div className="flex gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 rounded text-xs"
+              >
+                ‹
+              </button>
+              <span className="px-2 py-1">
+                {currentPage}/{Math.ceil(totalCount / itemsPerPage)}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / itemsPerPage), p + 1))}
+                disabled={currentPage === Math.ceil(totalCount / itemsPerPage)}
+                className="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 rounded text-xs"
+              >
+                ›
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -159,7 +185,7 @@ export default function ImageGallery({ selectedCollection = null }) {
           </div>
         )}
 
-        {!loading && !error && filteredImages.length === 0 && (
+        {!loading && !error && images.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-gray-400">
               <svg className="w-16 h-16 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -170,16 +196,16 @@ export default function ImageGallery({ selectedCollection = null }) {
           </div>
         )}
 
-        {!loading && !error && filteredImages.length > 0 && (
+        {!loading && !error && images.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {filteredImages.map((image) => {
+            {images.map((image) => {
               const imageUrl = getImageUrl(image);
               const hasFile = !!image.storage_path;
 
               return (
                 <div
                   key={image.id}
-                  onClick={() => hasFile && openLightbox(image)}
+                  onClick={() => hasFile && handleImageClick(image)}
                   className={`relative aspect-square rounded-lg overflow-hidden group ${
                     hasFile ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                   }`}
@@ -226,78 +252,10 @@ export default function ImageGallery({ selectedCollection = null }) {
         )}
       </div>
 
-      {/* Lightbox */}
-      {showLightbox && selectedImage && (
-        <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
-          onClick={closeLightbox}
-        >
-          <div className="relative max-w-6xl max-h-full" onClick={(e) => e.stopPropagation()}>
-            {/* Close button */}
-            <button
-              onClick={closeLightbox}
-              className="absolute top-4 right-4 p-2 bg-gray-900/80 hover:bg-gray-800 text-white rounded-full transition-colors z-10"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            {/* Image */}
-            <img
-              src={getImageUrl(selectedImage)}
-              alt={selectedImage.filename}
-              className="max-w-full max-h-[80vh] object-contain rounded-lg"
-            />
-
-            {/* Metadata panel */}
-            <div className="mt-4 bg-gray-900 rounded-lg p-4 max-h-48 overflow-y-auto">
-              <h4 className="font-semibold text-white mb-2">{selectedImage.filename}</h4>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {selectedImage.custom_metadata?.width && (
-                  <div>
-                    <span className="text-gray-400">Dimensions:</span>
-                    <span className="text-white ml-2">
-                      {selectedImage.custom_metadata.width} × {selectedImage.custom_metadata.height}
-                    </span>
-                  </div>
-                )}
-
-                {selectedImage.custom_metadata?.generator && (
-                  <div>
-                    <span className="text-gray-400">Generator:</span>
-                    <span className="text-white ml-2">{selectedImage.custom_metadata.generator}</span>
-                  </div>
-                )}
-
-                {selectedImage.created_at && (
-                  <div className="col-span-2">
-                    <span className="text-gray-400">Created:</span>
-                    <span className="text-white ml-2">
-                      {new Date(selectedImage.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                )}
-
-                {selectedImage.custom_metadata?.ai_prompt && (
-                  <div className="col-span-2">
-                    <span className="text-gray-400">AI Prompt:</span>
-                    <p className="text-white mt-1 text-xs bg-gray-800 p-2 rounded">
-                      {selectedImage.custom_metadata.ai_prompt}
-                    </p>
-                  </div>
-                )}
-
-                {selectedImage.custom_metadata?.model && (
-                  <div className="col-span-2">
-                    <span className="text-gray-400">Model:</span>
-                    <span className="text-white ml-2">{selectedImage.custom_metadata.model}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* Info: Click images to open full browser */}
+      {!loading && !error && images.length > 0 && (
+        <div className="p-4 text-center text-xs text-gray-500 border-t border-gray-800">
+          Click any image to open full browser with metadata and links
         </div>
       )}
     </div>

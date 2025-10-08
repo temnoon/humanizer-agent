@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import PropTypes from 'prop-types';
+import SearchBar from './SearchBar';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 /**
  * ImageBrowser Component
@@ -21,10 +23,10 @@ export default function ImageBrowser({ onNavigateToConversation, onNavigateToTra
   const [selectedImage, setSelectedImage] = useState(null);
   const [imageMetadata, setImageMetadata] = useState(null);
 
-  // Pagination state for infinite scroll
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(0);
-  const observerTarget = useRef(null);
+  // Pagination state
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [paginationMode, setPaginationMode] = useState('infinite'); // 'infinite' or 'pages'
 
   // Photos.app state
   const [photosAvailable, setPhotosAvailable] = useState(false);
@@ -39,6 +41,11 @@ export default function ImageBrowser({ onNavigateToConversation, onNavigateToTra
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterGenerator, setFilterGenerator] = useState('all');
+  const [filterMimeType, setFilterMimeType] = useState('all');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const { preferences } = useWorkspace();
+  const [itemsPerPage, setItemsPerPage] = useState(preferences.itemsPerPage);
 
   const API_BASE = 'http://localhost:8000';
 
@@ -47,33 +54,20 @@ export default function ImageBrowser({ onNavigateToConversation, onNavigateToTra
     checkPhotosAvailability();
   }, []);
 
-  // Load images when view changes
+  // Update itemsPerPage when preferences change
+  useEffect(() => {
+    setItemsPerPage(preferences.itemsPerPage);
+  }, [preferences.itemsPerPage]);
+
+  // Load images when view, filters, or itemsPerPage change
   useEffect(() => {
     if (view === 'library') {
       setImages([]);
-      setPage(0);
-      setHasMore(true);
-      loadLibraryImages(0);
+      setCurrentPage(1);
+      loadLibraryImages(1);
     }
-  }, [view]);
+  }, [view, itemsPerPage, searchQuery, filterGenerator, filterMimeType, filterDateFrom, filterDateTo]);
 
-  // Infinite scroll observer
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && view === 'library') {
-          loadLibraryImages(page + 1);
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasMore, loading, page, view]);
 
   const checkPhotosAvailability = async () => {
     try {
@@ -84,32 +78,49 @@ export default function ImageBrowser({ onNavigateToConversation, onNavigateToTra
     }
   };
 
-  const loadLibraryImages = async (pageNum) => {
+  const loadLibraryImages = async (page) => {
     if (loading) return;
 
     setLoading(true);
     setError(null);
 
-    const ITEMS_PER_PAGE = 100;
-
     try {
-      const response = await axios.get(`${API_BASE}/api/library/media`, {
-        params: {
-          limit: ITEMS_PER_PAGE,
-          offset: pageNum * ITEMS_PER_PAGE
-        }
-      });
+      const params = {
+        limit: itemsPerPage,
+        offset: (page - 1) * itemsPerPage
+      };
 
-      const newImages = response.data.media || [];
-
-      if (pageNum === 0) {
-        setImages(newImages);
-      } else {
-        setImages(prev => [...prev, ...newImages]);
+      // Add search query
+      if (searchQuery) {
+        params.search = searchQuery;
       }
 
-      setPage(pageNum);
-      setHasMore(newImages.length === ITEMS_PER_PAGE);
+      // Add generator filter
+      if (filterGenerator !== 'all') {
+        params.generator = filterGenerator;
+      }
+
+      // Add mime type filter
+      if (filterMimeType !== 'all') {
+        params.mime_type = filterMimeType;
+      }
+
+      // Add date filters
+      if (filterDateFrom) {
+        params.date_from = filterDateFrom;
+      }
+      if (filterDateTo) {
+        params.date_to = filterDateTo;
+      }
+
+      const response = await axios.get(`${API_BASE}/api/library/media`, { params });
+
+      const newImages = response.data.media || [];
+      const total = response.data.total || newImages.length;
+
+      setImages(newImages);
+      setTotalCount(total);
+      setCurrentPage(page);
     } catch (err) {
       setError('Failed to load images: ' + (err.response?.data?.detail || err.message));
     } finally {
@@ -205,28 +216,13 @@ export default function ImageBrowser({ onNavigateToConversation, onNavigateToTra
     return null;
   };
 
-  const filterImages = () => {
-    let filtered = images;
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(img =>
-        img.filename?.toLowerCase().includes(query) ||
-        img.custom_metadata?.ai_prompt?.toLowerCase().includes(query)
-      );
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      loadLibraryImages(page);
     }
-
-    if (filterGenerator !== 'all') {
-      filtered = filtered.filter(img => {
-        const generator = img.custom_metadata?.generator?.toLowerCase() || 'unknown';
-        return generator === filterGenerator;
-      });
-    }
-
-    return filtered;
   };
-
-  const filteredImages = filterImages();
 
   return (
     <div className="h-full flex flex-col bg-gray-950">
@@ -267,32 +263,93 @@ export default function ImageBrowser({ onNavigateToConversation, onNavigateToTra
 
           {/* Search and Filters */}
           {view === 'library' && (
-            <div className="flex gap-3">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  placeholder="Search filename or prompt..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-3 py-2 pl-9 bg-gray-800 border border-gray-700 rounded-md text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-realm-symbolic"
-                />
-                <svg className="w-4 h-4 absolute left-3 top-2.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+            <div className="space-y-3">
+              {/* Row 1: Search */}
+              <SearchBar
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search filename or prompt..."
+                loading={loading}
+                className="w-full"
+              />
+
+              {/* Row 2: Filters */}
+              <div className="flex gap-2">
+                <select
+                  value={filterGenerator}
+                  onChange={(e) => setFilterGenerator(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-realm-symbolic"
+                >
+                  <option value="all">All Generators</option>
+                  <option value="dall-e">DALL-E</option>
+                  <option value="stable-diffusion">Stable Diffusion</option>
+                  <option value="midjourney">Midjourney</option>
+                  <option value="user-upload">User Upload</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+
+                <select
+                  value={filterMimeType}
+                  onChange={(e) => setFilterMimeType(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-realm-symbolic"
+                >
+                  <option value="all">All Types</option>
+                  <option value="image/png">PNG</option>
+                  <option value="image/jpeg">JPEG</option>
+                  <option value="image/webp">WebP</option>
+                  <option value="image/gif">GIF</option>
+                </select>
+
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(parseInt(e.target.value))}
+                  className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-realm-symbolic"
+                  title="Items per page"
+                >
+                  <option value="50">50/page</option>
+                  <option value="100">100/page</option>
+                  <option value="200">200/page</option>
+                  <option value="500">500/page</option>
+                  <option value="1000">1000/page</option>
+                  <option value="2000">2000/page</option>
+                </select>
               </div>
 
-              <select
-                value={filterGenerator}
-                onChange={(e) => setFilterGenerator(e.target.value)}
-                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-realm-symbolic"
-              >
-                <option value="all">All Generators</option>
-                <option value="dall-e">DALL-E</option>
-                <option value="stable-diffusion">Stable Diffusion</option>
-                <option value="midjourney">Midjourney</option>
-                <option value="user-upload">User Upload</option>
-                <option value="unknown">Unknown</option>
-              </select>
+              {/* Row 3: Date Range */}
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={(e) => setFilterDateFrom(e.target.value)}
+                  placeholder="From date"
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-realm-symbolic"
+                />
+                <input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={(e) => setFilterDateTo(e.target.value)}
+                  placeholder="To date"
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-realm-symbolic"
+                />
+                {(filterDateFrom || filterDateTo) && (
+                  <button
+                    onClick={() => {
+                      setFilterDateFrom('');
+                      setFilterDateTo('');
+                    }}
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md text-sm transition-colors"
+                    title="Clear date filter"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Results count */}
+              <div className="text-xs text-gray-400">
+                {totalCount > 0 ? `${totalCount} total images` : 'No images found'}
+                {totalPages > 1 && ` • Page ${currentPage} of ${totalPages}`}
+              </div>
             </div>
           )}
         </div>
@@ -338,7 +395,7 @@ export default function ImageBrowser({ onNavigateToConversation, onNavigateToTra
             </div>
           )}
 
-          {!loading && !error && filteredImages.length === 0 && (
+          {!loading && !error && images.length === 0 && (
             <div className="flex items-center justify-center h-full">
               <div className="text-center text-gray-400">
                 <svg className="w-16 h-16 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -349,14 +406,10 @@ export default function ImageBrowser({ onNavigateToConversation, onNavigateToTra
             </div>
           )}
 
-          {!loading && !error && filteredImages.length > 0 && (
+          {!loading && !error && images.length > 0 && (
             <div>
-              <div className="text-sm text-gray-400 mb-4">
-                {filteredImages.length} image{filteredImages.length !== 1 ? 's' : ''}
-              </div>
-
               <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {filteredImages.map((image) => {
+                {images.map((image) => {
                   const imageUrl = getImageUrl(image);
                   const hasFile = !!image.storage_path;
 
@@ -397,10 +450,70 @@ export default function ImageBrowser({ onNavigateToConversation, onNavigateToTra
                 })}
               </div>
 
-              {/* Infinite scroll target */}
-              {view === 'library' && hasMore && (
-                <div ref={observerTarget} className="h-20 flex items-center justify-center">
-                  <div className="text-gray-500 text-sm">Loading more...</div>
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => goToPage(1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 text-white rounded-md text-sm transition-colors"
+                    title="First page"
+                  >
+                    ««
+                  </button>
+                  <button
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 text-white rounded-md text-sm transition-colors"
+                  >
+                    ‹ Previous
+                  </button>
+
+                  {/* Page numbers */}
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => goToPage(pageNum)}
+                          className={`px-3 py-2 rounded-md text-sm transition-colors ${
+                            currentPage === pageNum
+                              ? 'bg-realm-symbolic text-white'
+                              : 'bg-gray-800 hover:bg-gray-700 text-white'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 text-white rounded-md text-sm transition-colors"
+                  >
+                    Next ›
+                  </button>
+                  <button
+                    onClick={() => goToPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 text-white rounded-md text-sm transition-colors"
+                    title="Last page"
+                  >
+                    »»
+                  </button>
                 </div>
               )}
             </div>

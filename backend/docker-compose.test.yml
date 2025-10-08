@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  postgres-test:
+    image: ankane/pgvector:latest
+    container_name: humanizer-test-db
+    environment:
+      POSTGRES_DB: humanizer_test
+      POSTGRES_USER: humanizer
+      POSTGRES_PASSWORD: humanizer
+    ports:
+      - "5433:5432"  # Use different port to avoid conflict with production
+    volumes:
+      - test-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U humanizer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  test-db-data:

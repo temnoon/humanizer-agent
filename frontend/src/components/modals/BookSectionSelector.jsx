@@ -44,8 +44,9 @@ export default function BookSectionSelector({ message, chunks, onClose, onSucces
     setLoading(true);
     setError(null);
     try {
+      // No user_id filter - show all books (single-user mode, consistent with BookBuilder)
       const response = await axios.get(`${API_BASE}/api/books/`, {
-        params: { user_id: userId, limit: 100 }
+        params: { limit: 100 }
       });
       setBooks(response.data);
     } catch (err) {

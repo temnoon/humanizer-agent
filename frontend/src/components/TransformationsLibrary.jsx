@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import PropTypes from 'prop-types';
+import SearchBar from './SearchBar';
 
 /**
  * TransformationsLibrary Component
@@ -87,8 +88,7 @@ export default function TransformationsLibrary({ onSelect }) {
     }
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
+  const handleSearch = () => {
     loadTransformations(searchQuery);
   };
 
@@ -158,15 +158,14 @@ export default function TransformationsLibrary({ onSelect }) {
         {viewMode === 'list' && (
           <>
             {/* Search */}
-            <form onSubmit={handleSearch} className="mb-3">
-              <input
-                type="text"
-                placeholder="Search transformations..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-              />
-            </form>
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              onSearch={handleSearch}
+              placeholder="Search transformations..."
+              loading={loading}
+              className="mb-3"
+            />
 
             {/* Filters */}
             <div className="flex gap-2">
@@ -223,27 +222,27 @@ export default function TransformationsLibrary({ onSelect }) {
                   onClick={() => loadTransformationDetail(trans.id)}
                   className="bg-gray-800 border border-gray-700 p-4 rounded hover:bg-gray-750 cursor-pointer"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-2xl">{getJobTypeIcon(trans.job_type)}</span>
-                      <div>
-                        <h3 className="font-bold">{trans.name}</h3>
-                        <p className="text-sm text-gray-400">{getJobTypeLabel(trans.job_type)}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2 mb-2 min-w-0 flex-1">
+                      <span className="text-2xl shrink-0">{getJobTypeIcon(trans.job_type)}</span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-bold break-words">{trans.name}</h3>
+                        <p className="text-sm text-gray-400 break-words">{getJobTypeLabel(trans.job_type)}</p>
                       </div>
                     </div>
 
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${getStatusBadge(trans.status)}`}>
+                    <span className={`px-2 py-1 rounded text-xs font-bold shrink-0 ${getStatusBadge(trans.status)}`}>
                       {trans.status.toUpperCase()}
                     </span>
                   </div>
 
                   {trans.description && (
-                    <p className="text-sm text-gray-400 mb-2">{trans.description}</p>
+                    <p className="text-sm text-gray-400 mb-2 break-words">{trans.description}</p>
                   )}
 
-                  <div className="flex gap-4 text-xs text-gray-500">
-                    <span>📅 {formatDate(trans.created_at)}</span>
-                    <span>📊 {trans.processed_items}/{trans.total_items} items</span>
+                  <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+                    <span className="shrink-0">📅 {formatDate(trans.created_at)}</span>
+                    <span className="shrink-0">📊 {trans.processed_items}/{trans.total_items} items</span>
                     <span>🪙 {trans.tokens_used.toLocaleString()} tokens</span>
                   </div>
 
@@ -262,47 +261,49 @@ export default function TransformationsLibrary({ onSelect }) {
             <div className="space-y-4">
               {/* Job Info */}
               <div className="bg-gray-800 border border-gray-700 p-4 rounded">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-3xl">{getJobTypeIcon(transformationDetail.job.job_type)}</span>
-                    <div>
-                      <h2 className="text-xl font-bold">{transformationDetail.job.name}</h2>
-                      <p className="text-sm text-gray-400">{getJobTypeLabel(transformationDetail.job.job_type)}</p>
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <span className="text-3xl shrink-0">{getJobTypeIcon(transformationDetail.job.job_type)}</span>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-xl font-bold break-words">{transformationDetail.job.name}</h2>
+                      <p className="text-sm text-gray-400 break-words">{getJobTypeLabel(transformationDetail.job.job_type)}</p>
                     </div>
                   </div>
 
-                  <span className={`px-3 py-1 rounded font-bold ${getStatusBadge(transformationDetail.job.status)}`}>
+                  <span className={`px-3 py-1 rounded font-bold shrink-0 ${getStatusBadge(transformationDetail.job.status)}`}>
                     {transformationDetail.job.status.toUpperCase()}
                   </span>
                 </div>
 
                 {transformationDetail.job.description && (
-                  <p className="text-gray-300 mb-3">{transformationDetail.job.description}</p>
+                  <p className="text-gray-300 mb-3 break-words">{transformationDetail.job.description}</p>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-gray-400">Created:</span>
-                    <span className="ml-2">{formatDate(transformationDetail.job.created_at)}</span>
+                <div className="space-y-2 text-sm">
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-gray-400 shrink-0">Created:</span>
+                    <span className="break-words">{formatDate(transformationDetail.job.created_at)}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-400">Completed:</span>
-                    <span className="ml-2">{formatDate(transformationDetail.job.completed_at)}</span>
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-gray-400 shrink-0">Completed:</span>
+                    <span className="break-words">{formatDate(transformationDetail.job.completed_at)}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-400">Progress:</span>
-                    <span className="ml-2">{transformationDetail.job.progress_percentage.toFixed(1)}%</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Tokens:</span>
-                    <span className="ml-2">{transformationDetail.job.tokens_used.toLocaleString()}</span>
+                  <div className="flex gap-4">
+                    <div className="flex gap-2">
+                      <span className="text-gray-400">Progress:</span>
+                      <span>{transformationDetail.job.progress_percentage.toFixed(1)}%</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="text-gray-400">Tokens:</span>
+                      <span>{transformationDetail.job.tokens_used.toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Configuration */}
-                <div className="mt-3 p-3 bg-gray-900 rounded">
+                <div className="mt-3 p-3 bg-gray-900 rounded overflow-hidden">
                   <h4 className="font-bold mb-2 text-sm">Configuration:</h4>
-                  <pre className="text-xs text-gray-400 overflow-x-auto">
+                  <pre className="text-xs text-gray-400 whitespace-pre-wrap break-words overflow-x-auto">
                     {JSON.stringify(transformationDetail.job.configuration, null, 2)}
                   </pre>
                 </div>
@@ -315,11 +316,11 @@ export default function TransformationsLibrary({ onSelect }) {
 
                   {transformationDetail.source_collection && (
                     <div className="mb-3 p-3 bg-gray-900 rounded">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span>📚</span>
-                        <span className="font-bold">{transformationDetail.source_collection.title}</span>
+                      <div className="flex items-start gap-2 mb-1">
+                        <span className="shrink-0">📚</span>
+                        <span className="font-bold break-words">{transformationDetail.source_collection.title}</span>
                       </div>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-400 break-words">
                         {transformationDetail.source_collection.message_count} messages •
                         {' '}{transformationDetail.source_collection.chunk_count} chunks
                       </p>
@@ -328,13 +329,13 @@ export default function TransformationsLibrary({ onSelect }) {
 
                   {transformationDetail.source_message && (
                     <div className="p-3 bg-gray-900 rounded">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
                         <span>💬</span>
                         <span className="font-bold">Message #{transformationDetail.source_message.sequence_number}</span>
                         <span className="text-xs text-gray-500">({transformationDetail.source_message.role})</span>
                       </div>
                       {transformationDetail.source_message.summary && (
-                        <p className="text-sm text-gray-400 mt-2">{transformationDetail.source_message.summary}</p>
+                        <p className="text-sm text-gray-400 mt-2 break-words">{transformationDetail.source_message.summary}</p>
                       )}
                     </div>
                   )}
@@ -370,9 +371,9 @@ export default function TransformationsLibrary({ onSelect }) {
                   <div className="space-y-2">
                     {transformationDetail.lineage.map((lin) => (
                       <div key={lin.id} className="p-2 bg-gray-900 rounded text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-400">Generation {lin.generation}</span>
-                          <span className="text-xs text-blue-400">{lin.transformation_path.join(' → ')}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-gray-400 shrink-0">Generation {lin.generation}</span>
+                          <span className="text-xs text-blue-400 break-words">{lin.transformation_path.join(' × ')}</span>
                         </div>
                       </div>
                     ))}

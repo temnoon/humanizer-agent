@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import PropTypes from 'prop-types';
+import SearchBar from './SearchBar';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 /**
  * LibraryBrowser Component
@@ -94,8 +96,7 @@ export default function LibraryBrowser({ onSelect }) {
     }
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
+  const handleSearch = () => {
     loadCollections(searchQuery);
   };
 
@@ -149,21 +150,13 @@ export default function LibraryBrowser({ onSelect }) {
         </div>
 
         {/* Search Bar */}
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search collections, messages, content..."
-            className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm focus:border-blue-500 focus:outline-none"
-          />
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors"
-          >
-            Search
-          </button>
-        </form>
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onSearch={handleSearch}
+          placeholder="Search collections, messages, content..."
+          loading={loading}
+        />
       </div>
 
       {/* Content Area */}

@@ -1,0 +1,317 @@
+#!/bin/bash
+# Database Switcher for Humanizer Agent
+# Switches between database profiles cleanly
+
+set -e
+
+BACKEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROFILES_DIR="$BACKEND_DIR/db_profiles"
+ENV_FILE="$BACKEND_DIR/.env"
+ACTIVE_PROFILE_FILE="$BACKEND_DIR/.active_db_profile"
+
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+show_usage() {
+    cat <<EOF
+${BLUE}Humanizer Agent - Database Switcher${NC}
+
+Usage: ./dbswitch [command] [profile]
+
+Commands:
+    list                List all available database profiles
+    switch <profile>    Switch to specified database profile
+    current             Show currently active database profile
+    info <profile>      Show details about a database profile
+    create <name>       Create a new database profile
+    init <profile>      Initialize database schema for profile
+
+Profiles:
+    production          Main production database (humanizer)
+    test                Testing database (humanizer_test)
+    archive             Archive database (humanizer_archive)
+    custom              Custom database profiles you create
+
+Examples:
+    ./dbswitch list                  # Show all profiles
+    ./dbswitch switch test           # Switch to test database
+    ./dbswitch current               # Show active profile
+    ./dbswitch init test             # Initialize test database schema
+    ./dbswitch create staging        # Create new staging profile
+
+EOF
+}
+
+list_profiles() {
+    echo -e "${BLUE}Available Database Profiles:${NC}\n"
+
+    for profile_file in "$PROFILES_DIR"/*.env; do
+        if [ -f "$profile_file" ]; then
+            profile_name=$(basename "$profile_file" .env)
+            db_url=$(grep "^DATABASE_URL=" "$profile_file" | cut -d'=' -f2-)
+            db_name=$(echo "$db_url" | sed -n 's/.*\/\([^/]*\)$/\1/p')
+
+            # Check if this is the active profile
+            active_marker=""
+            if [ -f "$ACTIVE_PROFILE_FILE" ]; then
+                active_profile=$(cat "$ACTIVE_PROFILE_FILE")
+                if [ "$active_profile" = "$profile_name" ]; then
+                    active_marker="${GREEN} [ACTIVE]${NC}"
+                fi
+            fi
+
+            echo -e "  ${YELLOW}$profile_name${NC}$active_marker"
+            echo -e "    Database: $db_name"
+            echo ""
+        fi
+    done
+}
+
+get_current_profile() {
+    if [ -f "$ACTIVE_PROFILE_FILE" ]; then
+        cat "$ACTIVE_PROFILE_FILE"
+    else
+        echo "unknown"
+    fi
+}
+
+show_current() {
+    current=$(get_current_profile)
+    if [ "$current" = "unknown" ]; then
+        echo -e "${YELLOW}No active profile set${NC}"
+        echo "Use './dbswitch switch <profile>' to activate a profile"
+    else
+        echo -e "${GREEN}Active Profile:${NC} $current"
+
+        profile_file="$PROFILES_DIR/$current.env"
+        if [ -f "$profile_file" ]; then
+            db_url=$(grep "^DATABASE_URL=" "$profile_file" | cut -d'=' -f2-)
+            echo -e "${BLUE}Database:${NC} $db_url"
+        fi
+    fi
+}
+
+switch_profile() {
+    profile=$1
+    profile_file="$PROFILES_DIR/$profile.env"
+
+    if [ ! -f "$profile_file" ]; then
+        echo -e "${RED}Error: Profile '$profile' not found${NC}"
+        echo "Available profiles:"
+        list_profiles
+        exit 1
+    fi
+
+    # Backup current .env if it exists
+    if [ -f "$ENV_FILE" ]; then
+        cp "$ENV_FILE" "$ENV_FILE.backup"
+        echo -e "${BLUE}Backed up current .env to .env.backup${NC}"
+    fi
+
+    # Copy profile to .env, but preserve ANTHROPIC_API_KEY
+    api_key=""
+    if [ -f "$ENV_FILE" ]; then
+        api_key=$(grep "^ANTHROPIC_API_KEY=" "$ENV_FILE" | cut -d'=' -f2- || echo "")
+    fi
+
+    # Copy profile
+    cp "$profile_file" "$ENV_FILE"
+
+    # Restore API key if it existed
+    if [ -n "$api_key" ]; then
+        # Remove any existing ANTHROPIC_API_KEY line from new .env
+        sed -i.tmp '/^ANTHROPIC_API_KEY=/d' "$ENV_FILE"
+        rm -f "$ENV_FILE.tmp"
+        # Add the preserved API key
+        echo "" >> "$ENV_FILE"
+        echo "# API Key (preserved from previous .env)" >> "$ENV_FILE"
+        echo "ANTHROPIC_API_KEY=$api_key" >> "$ENV_FILE"
+    fi
+
+    # Record active profile
+    echo "$profile" > "$ACTIVE_PROFILE_FILE"
+
+    db_url=$(grep "^DATABASE_URL=" "$profile_file" | cut -d'=' -f2-)
+    echo -e "${GREEN}✓ Switched to '$profile' profile${NC}"
+    echo -e "${BLUE}Database:${NC} $db_url"
+    echo ""
+    echo -e "${YELLOW}Note: Restart the backend server for changes to take effect${NC}"
+}
+
+show_info() {
+    profile=$1
+    profile_file="$PROFILES_DIR/$profile.env"
+
+    if [ ! -f "$profile_file" ]; then
+        echo -e "${RED}Error: Profile '$profile' not found${NC}"
+        exit 1
+    fi
+
+    echo -e "${BLUE}Profile Information: $profile${NC}\n"
+
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ "$key" =~ ^#.*$ ]] || [ -z "$key" ] && continue
+
+        # Mask API keys
+        if [[ "$key" =~ API_KEY ]]; then
+            value="********"
+        fi
+
+        echo -e "  ${YELLOW}$key${NC} = $value"
+    done < "$profile_file"
+}
+
+create_profile() {
+    profile_name=$1
+    profile_file="$PROFILES_DIR/$profile_name.env"
+
+    if [ -f "$profile_file" ]; then
+        echo -e "${RED}Error: Profile '$profile_name' already exists${NC}"
+        exit 1
+    fi
+
+    echo -e "${BLUE}Creating new database profile: $profile_name${NC}\n"
+
+    # Prompt for database details
+    read -p "Database name (e.g., humanizer_$profile_name): " db_name
+    db_name=${db_name:-"humanizer_$profile_name"}
+
+    read -p "Database user [humanizer]: " db_user
+    db_user=${db_user:-"humanizer"}
+
+    read -p "Database password [humanizer]: " db_password
+    db_password=${db_password:-"humanizer"}
+
+    read -p "Database host [localhost]: " db_host
+    db_host=${db_host:-"localhost"}
+
+    read -p "Database port [5432]: " db_port
+    db_port=${db_port:-"5432"}
+
+    # Create profile file
+    cat > "$profile_file" <<EOF
+# Database Profile: $profile_name
+# Created: $(date)
+
+DATABASE_URL=postgresql+asyncpg://$db_user:$db_password@$db_host:$db_port/$db_name
+
+# Embedding Configuration
+EMBEDDING_MODEL=voyage-3
+EMBEDDING_DIMENSION=1536
+ENABLE_VECTOR_SEARCH=true
+
+# Agent Configuration
+DEFAULT_MODEL=claude-sonnet-4-5-20250929
+MAX_TOKENS=4096
+TEMPERATURE=0.7
+
+# Server Configuration
+HOST=127.0.0.1
+PORT=8000
+RELOAD=true
+
+# File Upload
+MAX_FILE_SIZE_MB=10
+
+# Session Configuration
+SESSION_TIMEOUT_HOURS=24
+MAX_CHECKPOINTS=10
+EOF
+
+    echo -e "${GREEN}✓ Profile '$profile_name' created${NC}"
+    echo -e "${BLUE}File:${NC} $profile_file"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Create the database: createdb -U $db_user -h $db_host -p $db_port $db_name"
+    echo "  2. Initialize schema: ./dbswitch init $profile_name"
+    echo "  3. Switch to profile: ./dbswitch switch $profile_name"
+}
+
+init_database() {
+    profile=$1
+    profile_file="$PROFILES_DIR/$profile.env"
+
+    if [ ! -f "$profile_file" ]; then
+        echo -e "${RED}Error: Profile '$profile' not found${NC}"
+        exit 1
+    fi
+
+    db_url=$(grep "^DATABASE_URL=" "$profile_file" | cut -d'=' -f2-)
+
+    echo -e "${BLUE}Initializing database schema for profile: $profile${NC}"
+    echo -e "${BLUE}Database:${NC} $db_url"
+    echo ""
+
+    # Switch to this profile temporarily
+    current_profile=$(get_current_profile)
+    switch_profile "$profile"
+
+    # Run database initialization
+    echo -e "${YELLOW}Running database migrations...${NC}"
+    cd "$BACKEND_DIR"
+    python3 -m database.init_chunk_db
+
+    echo -e "${GREEN}✓ Database initialized${NC}"
+
+    # Switch back to original profile if different
+    if [ "$current_profile" != "unknown" ] && [ "$current_profile" != "$profile" ]; then
+        echo ""
+        echo -e "${BLUE}Switching back to '$current_profile' profile...${NC}"
+        switch_profile "$current_profile"
+    fi
+}
+
+# Main command router
+case "${1:-help}" in
+    list|ls)
+        list_profiles
+        ;;
+    switch|use)
+        if [ -z "$2" ]; then
+            echo -e "${RED}Error: Profile name required${NC}"
+            echo "Usage: ./dbswitch switch <profile>"
+            exit 1
+        fi
+        switch_profile "$2"
+        ;;
+    current|active)
+        show_current
+        ;;
+    info|show)
+        if [ -z "$2" ]; then
+            echo -e "${RED}Error: Profile name required${NC}"
+            echo "Usage: ./dbswitch info <profile>"
+            exit 1
+        fi
+        show_info "$2"
+        ;;
+    create|new)
+        if [ -z "$2" ]; then
+            echo -e "${RED}Error: Profile name required${NC}"
+            echo "Usage: ./dbswitch create <name>"
+            exit 1
+        fi
+        create_profile "$2"
+        ;;
+    init|initialize)
+        if [ -z "$2" ]; then
+            echo -e "${RED}Error: Profile name required${NC}"
+            echo "Usage: ./dbswitch init <profile>"
+            exit 1
+        fi
+        init_database "$2"
+        ;;
+    help|--help|-h)
+        show_usage
+        ;;
+    *)
+        echo -e "${RED}Error: Unknown command '$1'${NC}\n"
+        show_usage
+        exit 1
+        ;;
+esac
