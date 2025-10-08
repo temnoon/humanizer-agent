@@ -42,6 +42,12 @@ sentence-transformers = "^2.3.0"
 # Note: sentence-transformers 2.2.2 has huggingface_hub compatibility issues
 # Upgrading to 2.3.0+ which uses updated huggingface_hub API
 
+# Advanced Embedding Operations
+umap-learn = "^0.5.5"  # Dimensionality reduction
+hdbscan = "^0.8.33"     # Density-based clustering
+networkx = "^3.2"       # Graph operations for knowledge graphs
+scikit-learn = "^1.4.0" # Additional ML utilities
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.4"
 pytest-asyncio = "^0.23.3"
