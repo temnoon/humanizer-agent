@@ -1,0 +1,537 @@
+#!/usr/bin/env bash
+#
+# Database Exploration Tool for Humanizer Agent
+#
+# Provides utilities to explore and debug the database:
+# - Statistics on chunks, embeddings, messages, media
+# - Find low-interest content (slash commands, "continue", empty chunks)
+# - Query patterns and analyze content
+# - Export data for analysis
+#
+# Usage:
+#   ./dbexplore stats              # Overall database statistics
+#   ./dbexplore chunks             # Chunk-specific statistics
+#   ./dbexplore embeddings         # Embedding statistics
+#   ./dbexplore low-interest       # Find low-interest chunks
+#   ./dbexplore sample [N]         # Sample N random chunks (default 10)
+#   ./dbexplore query <sql>        # Run custom SQL query
+#   ./dbexplore help               # Show this help message
+
+set -euo pipefail
+
+# Load active database profile
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ACTIVE_PROFILE_FILE="$SCRIPT_DIR/.active_db_profile"
+DB_PROFILES_DIR="$SCRIPT_DIR/db_profiles"
+
+# Default to production if no active profile
+if [[ -f "$ACTIVE_PROFILE_FILE" ]]; then
+    ACTIVE_PROFILE=$(cat "$ACTIVE_PROFILE_FILE")
+else
+    ACTIVE_PROFILE="production"
+fi
+
+# Load environment variables from active profile
+PROFILE_ENV="$DB_PROFILES_DIR/${ACTIVE_PROFILE}.env"
+if [[ ! -f "$PROFILE_ENV" ]]; then
+    echo "❌ Error: Profile '$ACTIVE_PROFILE' not found at $PROFILE_ENV"
+    exit 1
+fi
+
+# Source the profile (exports DATABASE_URL)
+set -a
+source "$PROFILE_ENV"
+set +a
+
+# Parse DATABASE_URL
+# Format: postgresql+asyncpg://user:password@host:port/database
+# or: postgresql://user:password@host:port/database
+if [[ -z "${DATABASE_URL:-}" ]]; then
+    echo "❌ Error: DATABASE_URL not found in profile $PROFILE_ENV"
+    exit 1
+fi
+
+# Remove protocol prefix
+DB_URL_NO_PROTO="${DATABASE_URL#postgresql+asyncpg://}"
+DB_URL_NO_PROTO="${DB_URL_NO_PROTO#postgresql://}"
+
+# Extract user:password@host:port/database
+if [[ $DB_URL_NO_PROTO =~ ^([^:]+):([^@]+)@([^:]+):([0-9]+)/(.+)$ ]]; then
+    DB_USER="${BASH_REMATCH[1]}"
+    DB_PASSWORD="${BASH_REMATCH[2]}"
+    DB_HOST="${BASH_REMATCH[3]}"
+    DB_PORT="${BASH_REMATCH[4]}"
+    DB_NAME="${BASH_REMATCH[5]}"
+else
+    echo "❌ Error: Could not parse DATABASE_URL: $DATABASE_URL"
+    exit 1
+fi
+
+# PostgreSQL connection parameters
+export PGPASSWORD="$DB_PASSWORD"
+PSQL_CMD="psql -U $DB_USER -h $DB_HOST -p $DB_PORT -d $DB_NAME"
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+#------------------------------------------------------------------------------
+# Helper Functions
+#------------------------------------------------------------------------------
+
+print_header() {
+    echo -e "\n${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}  $1${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}\n"
+}
+
+print_section() {
+    echo -e "\n${BLUE}▶ $1${NC}\n"
+}
+
+#------------------------------------------------------------------------------
+# Command: stats
+#------------------------------------------------------------------------------
+
+cmd_stats() {
+    print_header "Database Statistics - $ACTIVE_PROFILE"
+
+    # Overall stats
+    print_section "Overall Statistics"
+    $PSQL_CMD -c "
+    SELECT
+        (SELECT COUNT(*) FROM collections) as collections,
+        (SELECT COUNT(*) FROM messages) as messages,
+        (SELECT COUNT(*) FROM chunks) as chunks,
+        (SELECT COUNT(*) FROM media) as media,
+        (SELECT COUNT(*) FROM belief_frameworks) as belief_frameworks,
+        (SELECT COUNT(*) FROM chunk_relationships) as chunk_relationships;
+    "
+
+    # Chunk statistics
+    print_section "Chunk Statistics"
+    $PSQL_CMD -c "
+    SELECT
+        COUNT(*) as total_chunks,
+        COUNT(embedding) as with_embeddings,
+        COUNT(*) - COUNT(embedding) as without_embeddings,
+        ROUND(100.0 * COUNT(embedding) / NULLIF(COUNT(*), 0), 2) as pct_embedded,
+        COUNT(*) FILTER (WHERE token_count = 0 OR token_count IS NULL) as zero_tokens,
+        COUNT(*) FILTER (WHERE token_count > 0 AND embedding IS NULL) as need_embeddings,
+        MIN(token_count) as min_tokens,
+        MAX(token_count) as max_tokens,
+        ROUND(AVG(token_count)) as avg_tokens
+    FROM chunks;
+    "
+
+    # Media statistics
+    print_section "Media Statistics"
+    $PSQL_CMD -c "
+    SELECT
+        COUNT(*) as total_media,
+        COUNT(embedding) as with_embeddings,
+        COUNT(extracted_text) as with_extracted_text,
+        COUNT(*) FILTER (WHERE is_archived = true) as archived,
+        COUNT(*) FILTER (WHERE storage_path IS NOT NULL) as with_files,
+        SUM(size_bytes)::bigint as total_bytes,
+        pg_size_pretty(SUM(size_bytes)::bigint) as total_size
+    FROM media;
+    "
+
+    # Collection types
+    print_section "Collections by Type"
+    $PSQL_CMD -c "
+    SELECT
+        collection_type,
+        COUNT(*) as count,
+        SUM(message_count) as total_messages,
+        SUM(chunk_count) as total_chunks,
+        SUM(total_tokens) as total_tokens
+    FROM collections
+    GROUP BY collection_type
+    ORDER BY count DESC;
+    "
+
+    # Message roles
+    print_section "Messages by Role"
+    $PSQL_CMD -c "
+    SELECT
+        role,
+        COUNT(*) as count,
+        SUM(token_count) as total_tokens,
+        ROUND(AVG(token_count)) as avg_tokens
+    FROM messages
+    GROUP BY role
+    ORDER BY count DESC;
+    "
+}
+
+#------------------------------------------------------------------------------
+# Command: chunks
+#------------------------------------------------------------------------------
+
+cmd_chunks() {
+    print_header "Chunk Analysis - $ACTIVE_PROFILE"
+
+    # By level
+    print_section "Chunks by Level"
+    $PSQL_CMD -c "
+    SELECT
+        chunk_level,
+        COUNT(*) as count,
+        COUNT(embedding) as with_embeddings,
+        ROUND(100.0 * COUNT(embedding) / NULLIF(COUNT(*), 0), 2) as pct_embedded,
+        MIN(token_count) as min_tokens,
+        MAX(token_count) as max_tokens,
+        ROUND(AVG(token_count)) as avg_tokens
+    FROM chunks
+    GROUP BY chunk_level
+    ORDER BY count DESC;
+    "
+
+    # By content type
+    print_section "Chunks by Content Type"
+    $PSQL_CMD -c "
+    SELECT
+        content_type,
+        COUNT(*) as count,
+        COUNT(embedding) as with_embeddings,
+        ROUND(AVG(token_count)) as avg_tokens
+    FROM chunks
+    GROUP BY content_type
+    ORDER BY count DESC;
+    "
+
+    # Summary chunks
+    print_section "Summary Chunks"
+    $PSQL_CMD -c "
+    SELECT
+        is_summary,
+        summary_type,
+        COUNT(*) as count,
+        COUNT(embedding) as with_embeddings,
+        ROUND(AVG(token_count)) as avg_tokens
+    FROM chunks
+    GROUP BY is_summary, summary_type
+    ORDER BY count DESC;
+    "
+
+    # Token distribution
+    print_section "Token Distribution"
+    $PSQL_CMD -c "
+    SELECT
+        CASE
+            WHEN token_count = 0 OR token_count IS NULL THEN '0 tokens'
+            WHEN token_count <= 10 THEN '1-10 tokens'
+            WHEN token_count <= 50 THEN '11-50 tokens'
+            WHEN token_count <= 100 THEN '51-100 tokens'
+            WHEN token_count <= 500 THEN '101-500 tokens'
+            WHEN token_count <= 1000 THEN '501-1000 tokens'
+            WHEN token_count <= 5000 THEN '1001-5000 tokens'
+            ELSE '5000+ tokens'
+        END as token_range,
+        COUNT(*) as count,
+        COUNT(embedding) as with_embeddings
+    FROM chunks
+    GROUP BY token_range
+    ORDER BY
+        CASE
+            WHEN token_count = 0 OR token_count IS NULL THEN 0
+            WHEN token_count <= 10 THEN 1
+            WHEN token_count <= 50 THEN 2
+            WHEN token_count <= 100 THEN 3
+            WHEN token_count <= 500 THEN 4
+            WHEN token_count <= 1000 THEN 5
+            WHEN token_count <= 5000 THEN 6
+            ELSE 7
+        END;
+    "
+}
+
+#------------------------------------------------------------------------------
+# Command: embeddings
+#------------------------------------------------------------------------------
+
+cmd_embeddings() {
+    print_header "Embedding Analysis - $ACTIVE_PROFILE"
+
+    # Overall embedding stats
+    print_section "Overall Embedding Statistics"
+    $PSQL_CMD -c "
+    SELECT
+        'Chunks' as entity_type,
+        COUNT(*) as total,
+        COUNT(embedding) as with_embeddings,
+        COUNT(*) - COUNT(embedding) as without_embeddings,
+        ROUND(100.0 * COUNT(embedding) / NULLIF(COUNT(*), 0), 2) as pct_embedded
+    FROM chunks
+    UNION ALL
+    SELECT
+        'Media' as entity_type,
+        COUNT(*) as total,
+        COUNT(embedding) as with_embeddings,
+        COUNT(*) - COUNT(embedding) as without_embeddings,
+        ROUND(100.0 * COUNT(embedding) / NULLIF(COUNT(*), 0), 2) as pct_embedded
+    FROM media;
+    "
+
+    # Embedding models used
+    print_section "Embedding Models Used"
+    $PSQL_CMD -c "
+    SELECT
+        'Chunks' as entity_type,
+        embedding_model,
+        COUNT(*) as count
+    FROM chunks
+    WHERE embedding_model IS NOT NULL
+    GROUP BY embedding_model
+    UNION ALL
+    SELECT
+        'Media' as entity_type,
+        embedding_model,
+        COUNT(*) as count
+    FROM media
+    WHERE embedding_model IS NOT NULL
+    GROUP BY embedding_model
+    ORDER BY entity_type, count DESC;
+    "
+
+    # Recent embeddings
+    print_section "Recent Embeddings (Last 10)"
+    $PSQL_CMD -c "
+    SELECT
+        'Chunk' as type,
+        id,
+        embedding_model,
+        embedding_generated_at,
+        token_count,
+        LEFT(content, 60) as content_preview
+    FROM chunks
+    WHERE embedding IS NOT NULL
+    ORDER BY embedding_generated_at DESC NULLS LAST
+    LIMIT 10;
+    "
+}
+
+#------------------------------------------------------------------------------
+# Command: low-interest
+#------------------------------------------------------------------------------
+
+cmd_low_interest() {
+    print_header "Low-Interest Content Analysis - $ACTIVE_PROFILE"
+
+    # Zero token chunks
+    print_section "Zero Token Chunks"
+    $PSQL_CMD -c "
+    SELECT
+        COUNT(*) as count,
+        chunk_level,
+        content_type
+    FROM chunks
+    WHERE token_count = 0 OR token_count IS NULL
+    GROUP BY chunk_level, content_type
+    ORDER BY count DESC;
+    "
+
+    # Slash commands
+    print_section "Slash Commands"
+    $PSQL_CMD -c "
+    SELECT
+        COUNT(*) as count,
+        LEFT(content, 50) as command_preview
+    FROM chunks
+    WHERE content ~ '^/'
+    GROUP BY LEFT(content, 50)
+    ORDER BY count DESC
+    LIMIT 20;
+    "
+
+    # "Continue" messages
+    print_section "'Continue' Style Messages"
+    $PSQL_CMD -c "
+    SELECT
+        COUNT(*) as count,
+        content
+    FROM chunks
+    WHERE LOWER(TRIM(content)) IN ('continue', 'go on', 'keep going', 'next', 'more', 'ok', 'yes', 'no', 'k', 'kk')
+    GROUP BY content
+    ORDER BY count DESC;
+    "
+
+    # Very short chunks (1-10 tokens)
+    print_section "Very Short Chunks (1-10 tokens)"
+    $PSQL_CMD -c "
+    SELECT
+        token_count,
+        COUNT(*) as count,
+        COUNT(embedding) as with_embeddings
+    FROM chunks
+    WHERE token_count BETWEEN 1 AND 10
+    GROUP BY token_count
+    ORDER BY token_count;
+    "
+
+    # Recommended exclusion criteria
+    print_section "Recommended Exclusion Summary"
+    $PSQL_CMD -c "
+    SELECT
+        'Zero tokens' as criteria,
+        COUNT(*) as count
+    FROM chunks
+    WHERE token_count = 0 OR token_count IS NULL
+    UNION ALL
+    SELECT
+        'Slash commands' as criteria,
+        COUNT(*) as count
+    FROM chunks
+    WHERE content ~ '^/'
+    UNION ALL
+    SELECT
+        'Single-word continue' as criteria,
+        COUNT(*) as count
+    FROM chunks
+    WHERE LOWER(TRIM(content)) IN ('continue', 'go on', 'keep going', 'next', 'more', 'ok', 'yes', 'no', 'k', 'kk')
+    UNION ALL
+    SELECT
+        'Total low-interest (unique)' as criteria,
+        COUNT(DISTINCT id) as count
+    FROM chunks
+    WHERE
+        token_count = 0 OR token_count IS NULL
+        OR content ~ '^/'
+        OR LOWER(TRIM(content)) IN ('continue', 'go on', 'keep going', 'next', 'more', 'ok', 'yes', 'no', 'k', 'kk');
+    "
+}
+
+#------------------------------------------------------------------------------
+# Command: sample
+#------------------------------------------------------------------------------
+
+cmd_sample() {
+    local limit=${1:-10}
+
+    print_header "Random Sample of Chunks - $ACTIVE_PROFILE"
+
+    echo -e "${BLUE}Showing $limit random chunks${NC}\n"
+
+    $PSQL_CMD -c "
+    SELECT
+        id,
+        chunk_level,
+        token_count,
+        CASE WHEN embedding IS NULL THEN '❌' ELSE '✅' END as embedded,
+        LEFT(content, 80) as content_preview
+    FROM chunks
+    ORDER BY RANDOM()
+    LIMIT $limit;
+    "
+}
+
+#------------------------------------------------------------------------------
+# Command: query
+#------------------------------------------------------------------------------
+
+cmd_query() {
+    if [[ $# -eq 0 ]]; then
+        echo -e "${RED}❌ Error: No SQL query provided${NC}"
+        echo "Usage: ./dbexplore query <sql>"
+        exit 1
+    fi
+
+    local sql="$*"
+
+    print_header "Custom Query - $ACTIVE_PROFILE"
+
+    echo -e "${YELLOW}Executing:${NC} $sql\n"
+
+    $PSQL_CMD -c "$sql"
+}
+
+#------------------------------------------------------------------------------
+# Command: help
+#------------------------------------------------------------------------------
+
+cmd_help() {
+    cat << 'EOF'
+Database Exploration Tool for Humanizer Agent
+
+USAGE:
+    ./dbexplore COMMAND [OPTIONS]
+
+COMMANDS:
+    stats              Overall database statistics (collections, messages, chunks, media)
+    chunks             Detailed chunk analysis (by level, content type, token distribution)
+    embeddings         Embedding statistics (coverage, models used, recent embeddings)
+    low-interest       Find low-interest content (slash commands, "continue", zero tokens)
+    sample [N]         Show N random chunks (default: 10)
+    query <sql>        Run custom SQL query
+    help               Show this help message
+
+EXAMPLES:
+    ./dbexplore stats
+    ./dbexplore chunks
+    ./dbexplore embeddings
+    ./dbexplore low-interest
+    ./dbexplore sample 20
+    ./dbexplore query "SELECT COUNT(*) FROM chunks WHERE token_count > 1000"
+
+ACTIVE DATABASE:
+    Profile: $ACTIVE_PROFILE
+    Database: $DB_NAME
+    Host: $DB_HOST:$DB_PORT
+
+    To switch databases, use: ./dbswitch switch <profile>
+
+EOF
+}
+
+#------------------------------------------------------------------------------
+# Main
+#------------------------------------------------------------------------------
+
+# Show active database
+echo -e "${GREEN}📊 Database Explorer${NC} - Active profile: ${CYAN}$ACTIVE_PROFILE${NC} (${DB_NAME})"
+
+# Parse command
+if [[ $# -eq 0 ]]; then
+    cmd_help
+    exit 0
+fi
+
+COMMAND=$1
+shift
+
+case "$COMMAND" in
+    stats)
+        cmd_stats
+        ;;
+    chunks)
+        cmd_chunks
+        ;;
+    embeddings)
+        cmd_embeddings
+        ;;
+    low-interest)
+        cmd_low_interest
+        ;;
+    sample)
+        cmd_sample "$@"
+        ;;
+    query)
+        cmd_query "$@"
+        ;;
+    help|--help|-h)
+        cmd_help
+        ;;
+    *)
+        echo -e "${RED}❌ Error: Unknown command '$COMMAND'${NC}"
+        echo ""
+        cmd_help
+        exit 1
+        ;;
+esac
