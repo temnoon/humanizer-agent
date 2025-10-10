@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import LayoutManager from './layout/LayoutManager'
@@ -14,8 +15,18 @@ import MadhyamakaPanel from './panels/MadhyamakaPanel'
 import ArchivePanel from './panels/ArchivePanel'
 import PipelinePanel from './panels/PipelinePanel'
 import ImageBrowser from './ImageBrowser'
+import ImageViewer from './ImageViewer'
 import BookViewer from './BookViewer'
 import MarkdownEditorTab from './MarkdownEditorTab'
+import ComparisonViewer from './ComparisonViewer'
+import EmbeddingStats from './EmbeddingStats'
+import FrameworkBrowser from './FrameworkBrowser'
+import ClusterExplorer from './ClusterExplorer'
+import TransformationLab from './TransformationLab'
+import ChunkBrowser from './ChunkBrowser'
+import LibraryBrowser from './LibraryBrowser'
+import AgentChat from './AgentChat'
+import Personifier from './Personifier'
 
 /**
  * Workstation - Simplified main layout using LayoutManager + WorkspaceContext
@@ -34,6 +45,7 @@ function Workstation() {
     addTab,
     closeTab,
     switchToTab,
+    updateTabData,
     navigateToNextTab,
     navigateToPrevTab,
     inspectorContent,
@@ -48,6 +60,7 @@ function Workstation() {
   const [showSettings, setShowSettings] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(300)
+  const [showAgentChat, setShowAgentChat] = useState(false)
 
   // Document state for legacy DocumentViewer (TODO: migrate to tabs)
   const [document, setDocument] = useState({
@@ -75,13 +88,46 @@ function Workstation() {
     enabled: true
   })
 
-  // Expose ImageBrowser opener to sidebar (temporary until sidebar uses context)
+  // Agent chat toggle shortcut (Cmd+`)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '`') {
+        e.preventDefault()
+        setShowAgentChat(prev => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // Expose openers to sidebar (temporary until sidebar uses context)
   useEffect(() => {
     window.openImageBrowser = () => {
       addTab('imageBrowser', '🖼️ Image Browser', {})
     }
+    window.openEmbeddingStats = () => {
+      addTab('embeddingStats', '📊 Embedding Statistics', {})
+    }
+    window.openFrameworks = () => {
+      addTab('frameworks', '🎭 Frameworks', {})
+    }
+    window.openClusterExplorer = () => {
+      addTab('clusterExplorer', '🌌 Cluster Explorer', {})
+    }
+    window.openTransformationLab = () => {
+      addTab('transformationLab', '⚗️ Transformation Lab', {})
+    }
+    window.openPersonifier = () => {
+      addTab('personifier', '✨ Personifier', {})
+    }
     return () => {
       delete window.openImageBrowser
+      delete window.openEmbeddingStats
+      delete window.openFrameworks
+      delete window.openClusterExplorer
+      delete window.openTransformationLab
+      delete window.openPersonifier
     }
   }, [addTab])
 
@@ -92,6 +138,10 @@ function Workstation() {
 
   const handleBookSelect = (book) => {
     addTab('book', book.title || 'Book', { book })
+  }
+
+  const handleArtifactSelect = (artifact) => {
+    addTab('artifact', `${artifact.artifact_type}: ${artifact.operation}`, { artifact })
   }
 
   const handleMessageSelect = (message) => {
@@ -118,12 +168,24 @@ function Workstation() {
   }
 
   const togglePanel = (panelName) => {
-    setActivePanel(activePanel === panelName ? null : panelName)
+    setActivePanel(activePanel === panelName ? null : panelName);
   }
 
   const handleResultReady = (newDocument) => {
-    setDocument(newDocument)
-    setActivePanel(null)
+    // Get the original content from the active tab (if it's a markdownEditor)
+    const originalContent = activeTabIndex >= 0 && tabs[activeTabIndex]?.type === 'markdownEditor'
+      ? tabs[activeTabIndex].data.content || ''
+      : document.content || '';
+
+    // Open comparison view in a new tab
+    addTab('comparison', `Transformation: ${newDocument.metadata?.persona || 'Result'}`, {
+      originalContent: originalContent,
+      transformedContent: newDocument.content,
+      transformationMetadata: newDocument.metadata || {}
+    });
+
+    // Close the transform panel
+    setActivePanel(null);
   }
 
   // Render active tab content
@@ -189,10 +251,169 @@ function Workstation() {
               // This would need to integrate with workspace context to persist
             }}
             metadata={activeTab.data.metadata || {}}
-            title={activeTab.label}
+            title={activeTab.title}
             readOnly={activeTab.data.readOnly || false}
+            // Navigation props (for message/image/chunk lists)
+            messageList={activeTab.data.messageList}
+            currentIndex={activeTab.data.currentIndex}
+            conversationData={activeTab.data.conversationData}
+            onNavigate={(newContent, newMetadata, newTitle, newIndex) => {
+              // Update current tab with new message content via context
+              updateTabData(activeTabIndex, {
+                title: newTitle,
+                data: {
+                  content: newContent,
+                  metadata: newMetadata,
+                  currentIndex: newIndex
+                }
+              });
+            }}
           />
         )
+
+      case 'artifact':
+        const artifact = activeTab.data.artifact;
+        return (
+          <div className="h-full overflow-y-auto bg-base-200 p-6">
+            <div className="max-w-4xl mx-auto space-y-4">
+              {/* Header */}
+              <div className="card bg-base-100 shadow-lg">
+                <div className="card-body">
+                  <h2 className="card-title text-2xl">{artifact.artifact_type}</h2>
+                  <p className="text-base-content/70">{artifact.operation}</p>
+                </div>
+              </div>
+
+              {/* Metadata */}
+              <div className="card bg-base-100 shadow-lg">
+                <div className="card-body">
+                  <h3 className="text-lg font-semibold mb-3">Metadata</h3>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div><strong>Type:</strong> {artifact.artifact_type}</div>
+                    <div><strong>Operation:</strong> {artifact.operation}</div>
+                    <div><strong>Created:</strong> {new Date(artifact.created_at).toLocaleString()}</div>
+                    <div><strong>Format:</strong> {artifact.content_format}</div>
+                    {artifact.token_count && <div><strong>Tokens:</strong> {artifact.token_count}</div>}
+                    {artifact.generation_model && <div><strong>Model:</strong> {artifact.generation_model}</div>}
+                  </div>
+                  {artifact.topics && artifact.topics.length > 0 && (
+                    <div className="mt-3">
+                      <strong>Topics:</strong>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {artifact.topics.map((topic, idx) => (
+                          <span key={idx} className="badge badge-primary">{topic}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="card bg-base-100 shadow-lg">
+                <div className="card-body">
+                  <h3 className="text-lg font-semibold mb-3">Content</h3>
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap bg-base-200 p-4 rounded text-sm font-mono">
+                      {artifact.content}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+
+              {/* Operation Parameters */}
+              {artifact.source_operation_params && Object.keys(artifact.source_operation_params).length > 0 && (
+                <div className="card bg-base-100 shadow-lg">
+                  <div className="card-body">
+                    <h3 className="text-lg font-semibold mb-3">Operation Parameters</h3>
+                    <pre className="bg-base-200 p-4 rounded text-xs overflow-x-auto">
+                      {JSON.stringify(artifact.source_operation_params, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+
+      case 'image':
+        return (
+          <ImageViewer
+            image={activeTab.data.image}
+            imageList={activeTab.data.imageList}
+            currentIndex={activeTab.data.currentIndex}
+            onNavigate={(newImage, newIndex, newMetadata) => {
+              // Update current tab with new image via context
+              updateTabData(activeTabIndex, {
+                title: newImage.filename || 'Image',
+                data: {
+                  image: newImage,
+                  imageList: activeTab.data.imageList,
+                  currentIndex: newIndex,
+                  metadata: newMetadata
+                }
+              });
+            }}
+          />
+        )
+
+      case 'embeddingStats':
+        return <EmbeddingStats />
+
+      case 'frameworks':
+        return <FrameworkBrowser />
+
+      case 'clusterExplorer':
+        return <ClusterExplorer />
+
+      case 'transformationLab':
+        return <TransformationLab />
+
+      case 'chunks':
+        return (
+          <ChunkBrowser
+            onChunkSelect={(chunk) => {
+              console.log('Chunk selected:', chunk);
+            }}
+            onNavigateToSource={(chunk) => {
+              if (chunk.source?.collection_id) {
+                addTab('conversation', chunk.source.collection_title || 'Conversation', {
+                  collection: {
+                    id: chunk.source.collection_id,
+                    title: chunk.source.collection_title
+                  }
+                });
+              }
+            }}
+          />
+        )
+
+      case 'library':
+        return (
+          <LibraryBrowser
+            onSelect={(collection) => {
+              addTab('conversation', collection.title || 'Conversation', { collection });
+            }}
+          />
+        )
+
+      case 'comparison':
+        return (
+          <ComparisonViewer
+            originalContent={activeTab.data.originalContent || ''}
+            transformedContent={activeTab.data.transformedContent || ''}
+            transformationMetadata={activeTab.data.transformationMetadata || {}}
+            title={activeTab.title}
+            evaluationMode={activeTab.data.transformationMetadata?.needsEvaluation || false}
+            onFeedbackSubmitted={(feedback) => {
+              console.log('Feedback submitted:', feedback);
+              // Could add notification here or update tab title
+            }}
+          />
+        )
+
+      case 'personifier':
+        return <Personifier />
 
       default:
         return (
@@ -253,6 +474,7 @@ function Workstation() {
       onConversationSelect={handleConversationSelect}
       onMessageSelect={handleMessageSelect}
       onBookSelect={handleBookSelect}
+      onArtifactSelect={handleArtifactSelect}
       isMobile={isMobile}
     />
   )
@@ -263,33 +485,32 @@ function Workstation() {
       {/* Interest List (collapsible breadcrumb trail) */}
       <InterestList />
 
-      {/* Tab Bar */}
-      {tabs.length > 0 && (
-        <div className="flex-none bg-gray-900 border-b border-gray-800 flex items-center">
-          {/* Prev/Next Navigation */}
-          <button
-            onClick={navigateToPrevTab}
-            disabled={tabs.length <= 1}
-            className="px-3 py-2 hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors border-r border-gray-800"
-            title="Previous tab"
-          >
+      {/* Tab Bar - Always visible (contains Agent Chat toggle) */}
+      <div className="flex-none bg-gray-900 border-b border-gray-800 flex items-center">
+        {/* Prev/Next Navigation */}
+        <button
+          onClick={navigateToPrevTab}
+          disabled={tabs.length <= 1}
+          className="px-3 py-2 hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors border-r border-gray-800"
+          title="Previous tab"
+        >
             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-          </button>
-          <button
-            onClick={navigateToNextTab}
-            disabled={tabs.length <= 1}
-            className="px-3 py-2 hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors border-r border-gray-800"
-            title="Next tab"
-          >
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+        </button>
+        <button
+          onClick={navigateToNextTab}
+          disabled={tabs.length <= 1}
+          className="px-3 py-2 hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors border-r border-gray-800"
+          title="Next tab"
+        >
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
 
-          {/* Tab List */}
-          <div className="flex-1 flex overflow-x-auto">
+        {/* Tab List */}
+        <div className="flex-1 flex overflow-x-auto">
             {tabs.map((tab, index) => (
               <div
                 key={tab.id}
@@ -317,25 +538,57 @@ function Workstation() {
                 </button>
               </div>
             ))}
-          </div>
-
-          {/* Settings Button */}
-          <button
-            onClick={() => setShowSettings(true)}
-            className="px-3 py-2 hover:bg-gray-800 transition-colors border-l border-gray-800"
-            title="Settings"
-          >
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
         </div>
-      )}
 
-      {/* Active Tab Content */}
+        {/* Agent Chat Toggle Button */}
+        <button
+          onClick={() => setShowAgentChat(prev => !prev)}
+          className={`px-3 py-2 transition-colors border-l border-gray-800 ${
+            showAgentChat
+              ? 'bg-realm-accent text-white'
+              : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+          }`}
+          title="Agent Chat (Cmd+`)"
+        >
+          <span className="text-lg">🤖</span>
+        </button>
+
+        {/* Settings Button */}
+        <button
+          onClick={() => setShowSettings(true)}
+          className="px-3 py-2 hover:bg-gray-800 transition-colors border-l border-gray-800"
+          title="Settings"
+        >
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Main Content Area with Vertical Split (Tab Content | Agent Chat) */}
       <div className="flex-1 overflow-hidden">
-        {renderTabContent()}
+        {showAgentChat ? (
+          <PanelGroup direction="vertical">
+            {/* Top: Active Tab Content */}
+            <Panel defaultSize={75} minSize={30}>
+              <div className="h-full overflow-hidden">
+                {renderTabContent()}
+              </div>
+            </Panel>
+
+            <PanelResizeHandle className="h-1 hover:h-2 bg-gray-800 hover:bg-realm-accent transition-all cursor-row-resize" />
+
+            {/* Bottom: Agent Chat */}
+            <Panel defaultSize={25} minSize={15} maxSize={50}>
+              <AgentChat />
+            </Panel>
+          </PanelGroup>
+        ) : (
+          <div className="h-full overflow-hidden">
+            {renderTabContent()}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -419,14 +672,32 @@ function Workstation() {
       <TransformationPanel
         isOpen={activePanel === 'transform'}
         onClose={() => setActivePanel(null)}
-        currentDocument={document}
+        currentDocument={
+          // Get content from active tab if it's a markdownEditor, otherwise use legacy document
+          activeTabIndex >= 0 && tabs[activeTabIndex]?.type === 'markdownEditor'
+            ? {
+                content: tabs[activeTabIndex].data.content || '',
+                type: 'markdown',
+                metadata: tabs[activeTabIndex].data.metadata || {}
+              }
+            : document
+        }
         onResultReady={handleResultReady}
       />
 
       <MadhyamakaPanel
         isOpen={activePanel === 'madhyamaka'}
         onClose={() => setActivePanel(null)}
-        currentDocument={document}
+        currentDocument={
+          // Get content from active tab if it's a markdownEditor, otherwise use legacy document
+          activeTabIndex >= 0 && tabs[activeTabIndex]?.type === 'markdownEditor'
+            ? {
+                content: tabs[activeTabIndex].data.content || '',
+                type: 'markdown',
+                metadata: tabs[activeTabIndex].data.metadata || {}
+              }
+            : document
+        }
         onResultReady={handleResultReady}
       />
 

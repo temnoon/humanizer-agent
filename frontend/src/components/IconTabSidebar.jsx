@@ -5,6 +5,9 @@ import LibraryBrowser from './LibraryBrowser'
 import TransformationsLibrary from './TransformationsLibrary'
 import BookBuilder from './BookBuilder'
 import ImageGallery from './ImageGallery'
+import ChunkBrowser from './ChunkBrowser'
+import AgentConversationsLibrary from './AgentConversationsLibrary'
+import ArtifactBrowser from './ArtifactBrowser'
 
 /**
  * IconTabSidebar - Hierarchical navigation with icon tabs
@@ -31,6 +34,7 @@ function IconTabSidebar({
   onConversationSelect,
   onMessageSelect,
   onBookSelect,
+  onArtifactSelect,
   isMobile = false,
   onClose
 }) {
@@ -165,7 +169,16 @@ function IconTabSidebar({
     { id: 'transformations', icon: '🔧', label: 'Transformations' },
     { id: 'books', icon: '📖', label: 'Books' },
     { id: 'images', icon: '🖼️', label: 'Images' },
-    { id: 'sessions', icon: '🗂️', label: 'Sessions' },
+    { id: 'chunks', icon: '🧩', label: 'Chunks' },
+    { id: 'artifacts', icon: '🗂️', label: 'Artifacts' },
+    { id: 'agentConversations', icon: '🤖', label: 'Agent Conversations', separator: true },
+    { id: 'personifier', icon: '✨', label: 'Personifier', separator: true },
+    { id: 'embeddings', icon: '🧠', label: 'Embeddings', separator: true },
+    { id: 'embeddingStats', icon: '📊', label: 'Embedding Stats' },
+    { id: 'frameworks', icon: '🎭', label: 'Frameworks' },
+    { id: 'clusterExplorer', icon: '🌌', label: 'Cluster Explorer' },
+    { id: 'transformationLab', icon: '⚗️', label: 'Transformation Lab' },
+    { id: 'sessions', icon: '🗂️', label: 'Sessions', separator: true },
     { id: 'conversations', icon: '💬', label: 'Conversations', disabled: !selectedSession },
     { id: 'messages', icon: '📝', label: 'Messages', disabled: !selectedConversation }
   ]
@@ -188,22 +201,26 @@ function IconTabSidebar({
     >
       {/* Icon Tab Bar */}
       <div className="w-14 bg-gray-950 border-r border-gray-800 flex flex-col items-center py-4 space-y-2">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => !tab.disabled && onViewChange(tab.id)}
-            disabled={tab.disabled}
-            className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
-              currentView === tab.id
-                ? 'bg-realm-symbolic text-white'
-                : tab.disabled
-                ? 'text-gray-700 cursor-not-allowed'
-                : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-            }`}
-            title={tab.label}
-          >
-            <span className="text-xl">{tab.icon}</span>
-          </button>
+        {tabs.map((tab, idx) => (
+          <div key={tab.id}>
+            {tab.separator && idx > 0 && (
+              <div className="w-8 h-px bg-gray-700 my-2 mx-auto" />
+            )}
+            <button
+              onClick={() => !tab.disabled && onViewChange(tab.id)}
+              disabled={tab.disabled}
+              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
+                currentView === tab.id
+                  ? 'bg-realm-symbolic text-white'
+                  : tab.disabled
+                  ? 'text-gray-700 cursor-not-allowed'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              }`}
+              title={tab.label}
+            >
+              <span className="text-xl">{tab.icon}</span>
+            </button>
+          </div>
         ))}
 
         {/* Spacer */}
@@ -294,6 +311,185 @@ function IconTabSidebar({
                 Open Full Image Browser
               </button>
               <ImageGallery selectedCollection={selectedCollection} />
+            </div>
+          )}
+
+          {currentView === 'chunks' && (
+            <ChunkBrowser
+              onChunkSelect={(chunk) => {
+                console.log('Chunk selected:', chunk);
+              }}
+              onNavigateToSource={(chunk) => {
+                if (chunk.source?.collection_id) {
+                  // Navigate to the conversation containing this chunk
+                  onCollectionSelect({
+                    id: chunk.source.collection_id,
+                    title: chunk.source.collection_title
+                  });
+                }
+              }}
+            />
+          )}
+
+          {currentView === 'artifacts' && (
+            <ArtifactBrowser
+              onArtifactSelect={onArtifactSelect}
+            />
+          )}
+
+          {currentView === 'agentConversations' && (
+            <AgentConversationsLibrary
+              onConversationSelect={(conversation) => {
+                console.log('Agent conversation selected:', conversation);
+                // TODO: Wire this to open the agent chat panel and load the conversation
+                // This would need to communicate with Workstation to:
+                // 1. Open the agent chat panel (setShowAgentChat(true))
+                // 2. Load the conversation into AgentChat
+              }}
+            />
+          )}
+
+          {/* Personifier - Gateway Feature */}
+          {currentView === 'personifier' && (
+            <div className="p-4">
+              <button
+                onClick={() => {
+                  if (window.openPersonifier) {
+                    window.openPersonifier();
+                  }
+                }}
+                className="w-full px-4 py-3 bg-realm-symbolic hover:bg-realm-symbolic-light text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="text-xl">✨</span>
+                Open Personifier
+              </button>
+              <p className="text-sm text-gray-400 mt-3">
+                Transform AI writing → conversational. Add "person-ness" through
+                geometric transformation in semantic space.
+              </p>
+              <div className="mt-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                <h4 className="text-xs font-semibold text-gray-300 mb-2">What it does:</h4>
+                <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
+                  <li>Detects AI patterns</li>
+                  <li>Applies learned transformations</li>
+                  <li>Shows conversational examples</li>
+                  <li>Educational, not deception</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Embedding Features - Open in main pane */}
+          {currentView === 'embeddingStats' && (
+            <div className="p-4">
+              <button
+                onClick={() => {
+                  if (window.openEmbeddingStats) {
+                    window.openEmbeddingStats();
+                  }
+                }}
+                className="w-full px-4 py-3 bg-realm-symbolic hover:bg-realm-symbolic-light text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="text-xl">📊</span>
+                Open Embedding Statistics
+              </button>
+              <p className="text-sm text-gray-400 mt-3">
+                View embedding coverage and quality metrics across your {' '}
+                <span className="text-realm-symbolic font-semibold">125,799 embeddings</span>
+              </p>
+            </div>
+          )}
+
+          {currentView === 'frameworks' && (
+            <div className="p-4">
+              <button
+                onClick={() => {
+                  if (window.openFrameworks) {
+                    window.openFrameworks();
+                  }
+                }}
+                className="w-full px-4 py-3 bg-realm-symbolic hover:bg-realm-symbolic-light text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="text-xl">🎭</span>
+                Discover Frameworks
+              </button>
+              <p className="text-sm text-gray-400 mt-3">
+                Auto-discover belief frameworks through embedding clustering (UMAP + HDBSCAN)
+              </p>
+            </div>
+          )}
+
+          {currentView === 'clusterExplorer' && (
+            <div className="p-4">
+              <button
+                onClick={() => {
+                  if (window.openClusterExplorer) {
+                    window.openClusterExplorer();
+                  }
+                }}
+                className="w-full px-4 py-3 bg-realm-symbolic hover:bg-realm-symbolic-light text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="text-xl">🌌</span>
+                Open 3D Cluster Explorer
+              </button>
+              <p className="text-sm text-gray-400 mt-3">
+                Interactive 3D visualization of embeddings in semantic space
+              </p>
+            </div>
+          )}
+
+          {currentView === 'transformationLab' && (
+            <div className="p-4">
+              <button
+                onClick={() => {
+                  if (window.openTransformationLab) {
+                    window.openTransformationLab();
+                  }
+                }}
+                className="w-full px-4 py-3 bg-realm-symbolic hover:bg-realm-symbolic-light text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="text-xl">⚗️</span>
+                Open Transformation Lab
+              </button>
+              <p className="text-sm text-gray-400 mt-3">
+                Experiment with transformation arithmetic: "chunk + skeptical_vector = skeptical version"
+              </p>
+            </div>
+          )}
+
+          {currentView === 'embeddings' && (
+            <div className="p-4">
+              <h3 className="text-lg font-bold text-white mb-4">Embedding Tools</h3>
+              <div className="space-y-2">
+                <button
+                  onClick={() => onViewChange('embeddingStats')}
+                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-left transition-colors flex items-center gap-3"
+                >
+                  <span className="text-2xl">📊</span>
+                  <span>Statistics</span>
+                </button>
+                <button
+                  onClick={() => onViewChange('frameworks')}
+                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-left transition-colors flex items-center gap-3"
+                >
+                  <span className="text-2xl">🎭</span>
+                  <span>Frameworks</span>
+                </button>
+                <button
+                  onClick={() => onViewChange('clusterExplorer')}
+                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-left transition-colors flex items-center gap-3"
+                >
+                  <span className="text-2xl">🌌</span>
+                  <span>3D Explorer</span>
+                </button>
+                <button
+                  onClick={() => onViewChange('transformationLab')}
+                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-left transition-colors flex items-center gap-3"
+                >
+                  <span className="text-2xl">⚗️</span>
+                  <span>Transformation Lab</span>
+                </button>
+              </div>
             </div>
           )}
 

@@ -1,837 +1,263 @@
 # CLAUDE.md - Humanizer Agent Bootstrap
 
-## ⚠️ CRITICAL CODING RULES - NEVER VIOLATE
-
-### 🚨 SQLAlchemy Reserved Keywords - MANDATORY
-
-**RULE**: NEVER use `metadata` as a field name in SQLAlchemy models.
-
-**Why**: `metadata` is RESERVED by SQLAlchemy's Declarative API for table metadata.
-Using it causes: `InvalidRequestError: Attribute name 'metadata' is reserved`
-
-**ALWAYS use**: `custom_metadata` instead
-
-**Applies to**:
-- ✅ SQLAlchemy model Column definitions
-- ✅ Pydantic schema field names
-- ✅ API endpoint request/response bodies
-- ✅ Frontend axios POST/PUT requests
-- ✅ Database migrations (Alembic)
-
-**Example**:
-```python
-# ❌ WRONG - Will crash on import
-class Book(Base):
-    metadata = Column(JSONB, default={})
-
-# ✅ CORRECT - Safe to use
-class Book(Base):
-    custom_metadata = Column(JSONB, default={})
-```
-
-**If you encounter this error**, fix ALL occurrences:
-1. Backend models: Search for `metadata = Column`
-2. Backend schemas: Search for `metadata:`
-3. Backend endpoints: Search for `.metadata`
-4. Frontend: Search for `metadata:` in axios calls
-
-**This rule saved us 30+ minutes of debugging. Respect it.**
+**Last Updated**: Oct 10, 2025 | **Status**: Artifacts operational, Tier system ready
 
 ---
 
-## 🔔 ACTIVATION CHECKLIST - MANDATORY for Every New Session
-
-**Run these steps BEFORE any coding. This brings you up to speed automatically.**
-
-### 1. Configure ChromaDB for Production Context
-
-The project uses **3 separate ChromaDB databases**:
-- **Production DB** (15+ memories) - Active dev context, TODOs, refactoring targets, session status
-- **Meta DB** (2 memories) - System guides, best practices, procedures
-- **Historical DB** (547 memories) - Complete archive, debugging history
-
-**Set MCP to Production DB** (if not already):
-```bash
-export CHROMA_DB_PATH="/Users/tem/archive/mcp-memory/mcp-memory-service/chroma_production_db"
-# Restart Claude Code if you changed this
-```
-
-### 2. Load Last Session Status (CRITICAL - Do First!)
-
-**Query Production DB for most recent session status**:
-
-```
-Use mcp__chromadb-memory__recall_memory with query: "session status report"
-```
-
-This tells you:
-- What was completed in last session
-- What's in progress
-- What's pending
-- Current codebase state
-- Next priorities
-
-**IMPORTANT**: Read this BEFORE checking git status to understand context.
-
-### 3. Check Codebase Changes Since Last Session
+## 🔔 NEW SESSION START
 
 ```bash
-cd /Users/tem/humanizer_root
-./track check
+# 1. Start services
+./start.sh  # Backend:8000, Frontend:5173
+
+# 2. Health check
+curl http://localhost:8000/api/library/stats
+curl http://localhost:8000/api/artifacts/health
+
+# 3. Check artifacts (4 artifacts exist)
+curl "http://localhost:8000/api/artifacts?limit=10"
 ```
 
-If changes detected:
+---
+
+## 🎯 Current State
+
+**Mission**: Computational Madhyamaka - embeddings reveal meaning construction
+
+**Recent Achievements** (Oct 10):
+- ✅ **Tier system planned**: Complete architecture for FREE/MEMBER/PRO/PREMIUM/ENTERPRISE
+- ✅ **MCP testing complete**: 11/12 tools operational, 1 bug fixed
+- ✅ **UI consistency**: Sidebar artifacts list-only behavior
+- ✅ **Artifact workflow tested**: Transformation → auto-save → GUI display verified
+- ✅ **Personifier**: 396 pairs, 9.2/10 quality, auto-save enabled
+
+**Database**:
+- Chunks: 139,232 (90% embedded)
+- Collections: 6,826 | Messages: 193,661
+- **Artifacts: 4** (tested with real transformations)
+
+---
+
+## ⚠️ CRITICAL RULES
+
+**SQLAlchemy**: NEVER use `metadata` field → use `custom_metadata`
+**F-Strings**: Extract nested f-strings to variable first
+**Venv**: Always `source venv/bin/activate` for backend commands
+**Default User**: `c7a31f8e-91e3-47e6-bea5-e33d0f35072d`
+**Routes**: Specific routes BEFORE parameterized routes (FastAPI order matters)
+
+---
+
+## 🚀 Quick Commands
+
+**Start**: `./start.sh` (backend:8000, frontend:5173)
+**Backend**: `cd backend && source venv/bin/activate && python [cmd]`
+**DB**: `./dbswitch list|switch` | `./dbexplore stats`
+**Embeddings**: `./embedgen plan|process|status`
+
+**Artifacts**:
 ```bash
-./track verify-notes    # Cross-reference with ChromaDB
-./track diff           # See what changed
-```
+# List artifacts
+curl "http://localhost:8000/api/artifacts?limit=10"
 
-If undocumented changes flagged → **Document immediately in ChromaDB before coding**
+# Create artifact (via personify with auto-save)
+curl -X POST http://localhost:8000/api/personify/rewrite \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Your text","save_as_artifact":true,"artifact_topics":["test"]}'
 
-### 4. Load System Guidance (Meta DB)
-
-Query the **Meta DB** for procedures and best practices:
-
-```
-Use mcp__chromadb-memory__recall_memory with query: "pinned guide best practice"
-```
-
-This retrieves the **Claude Code Memory Best Practices** guide.
-
-### 5. Document When Completing Work
-
-When completing features/refactoring:
-
-A. **Take tracking snapshot**:
-```bash
-cd /Users/tem/humanizer_root
-./track snapshot "Completed [description]"
-```
-
-B. **Store in ChromaDB** (Production DB):
-```
-Use mcp__chromadb-memory__store_memory:
-  content: "[What] Completed feature X
-           [Why] Required for user workflow Y
-           [How] Implemented A, B, C
-           [Next] Ready for Z, or feature complete
-
-           Files: path/to/file.py (lines X-Y)"
-
-  tags: ["module", "type", "status", "priority"]
-```
-
-C. **Create session status at end of major work**:
-```
-Use mcp__chromadb-memory__store_memory:
-  content: "SESSION STATUS REPORT - [Date] - [Feature] Complete
-
-           ## ACCOMPLISHMENTS
-           - Feature X: COMPLETE
-           - Bug fixes: Y, Z
-
-           ## CURRENT STATE
-           - Database: N records
-           - Files modified: X
-
-           ## NEXT SESSION
-           - Priority: Feature A"
-
-  tags: ["session-status", "complete", "module"]
-```
-
-**Session status reports are CRITICAL** - they allow next session to resume with full context.
-
----
-
-## 🎯 Current Project State (Oct 2025)
-
-**Primary Goal**: Computational Madhyamaka - using embeddings to reveal the constructed, impermanent nature of meaning
-
-**Alignment with Mission**: All features support "Language as a Sense" framework - helping users witness their own subjective agency through narrative transformation.
-
-### Backend Capabilities ✅
-
-- ✅ **Transformation Engine**: PERSONA/NAMESPACE/STYLE transformations
-- ✅ **PostgreSQL + pgvector**: 139,232 chunks, embeddings (125,789 being generated), HNSW index
-- ✅ **Advanced Embeddings**: UMAP clustering, transformation arithmetic, framework discovery
-- ✅ **Philosophical Features**: Madhyamaka detection, multi-perspective analysis, contemplation exercises
-- ✅ **Archive Import**: ChatGPT/Claude conversation import with full metadata
-- ✅ **Image System**: 8,640 media records, DALL-E/SD/MJ metadata extraction, Apple Photos integration
-- ✅ **Transformation Pipeline**: Background job processing, lineage tracking, 4 transformation types
-- ✅ **Vision System**: Claude vision API integration, OCR, image analysis
-- ✅ **Book Builder Backend**: CRUD operations, hierarchical sections, content linking (15 API endpoints)
-
-### Frontend Capabilities ✅
-
-- ✅ **Unified Architecture** (Oct 6, 2025 - Phase 2 Complete):
-  - **WorkspaceContext** (195 lines): Single source of truth - tabs, inspector pane, interest list, preferences
-  - **LayoutManager** (140 lines): Unified pane system (sidebar | main | preview | inspector)
-  - **MessageViewer** (352 lines): Non-modal message viewer in inspector pane - NO MORE MODALS
-  - **InterestList** (120 lines): Browse path tracking (surfaces user's subjective journey)
-  - **Workstation** (385 lines): Main component using context + LayoutManager + inspector
-  - **Philosophy**: "Witness your own subjective agency" - makes exploration path visible
-- ✅ **Book Builder UI**: Full-screen editor, section navigator, markdown + LaTeX rendering, content cards
-- ✅ **Image Browser**: Infinite scroll (8,640+ images), metadata panel, conversation links
-- ✅ **Transformation Library**: Browse/filter jobs, reapply transformations, provenance tracking
-- ✅ **Pipeline Panel**: Job creation, progress tracking, results modal
-- ✅ **Configurable Limits**: Items-per-page dropdown (50-2000), no hardcoded limits
-
-### Bug Fixes ✅
-
-- ✅ Unicode filename encoding (screenshots work)
-- ✅ Book persistence (user_id migration)
-- ✅ Layout bugs fixed
-- ✅ Image display in conversations
-- ✅ Media duplicate records (backend deduplication + .limit(1) fix)
-- ✅ React duplicate key warnings (ImageGallery fixed)
-- ✅ Search functionality (Oct 7, 2025 - LibraryBrowser + TransformationsLibrary handleSearch fixed)
-
-### Known Issues ⚠️
-
-- ⚠️ Database has duplicate media records (handled gracefully, cleanup recommended)
-
-### Missing Features ❌
-
-- ❌ Book Builder Phase 2 (CRUD on content cards)
-- ❌ Vision OCR background processing
-- ❌ LaTeX/PDF export
-- ❌ TOML-assisted config UI
-
-### Database Statistics (Oct 7, 2025)
-
-```
-Chunks: 139,232 total
-  - With embeddings: ~125,789 (in progress via embedgen-all)
-  - High-value chunks: 125,799 (90%)
-  - Low-interest skipped: 13,433 (10%)
-Conversations: 1,660
-Messages: 46,379
-Media: 8,640 (1,841 with files)
-Books: 4 active
-Book Sections: 7
-Transformation Jobs: 13+
+# Search artifacts (semantic)
+curl "http://localhost:8000/api/artifacts/search?query=consciousness&limit=10"
 ```
 
 ---
 
-## 🏗️ Architecture Overview
+## 🎯 NEXT SESSION PRIORITY #1
 
-### Backend (Python 3.11 + FastAPI)
-- FastAPI app with 7 router modules
-- PostgreSQL + pgvector
-- Claude Agent SDK for transformations
-- Background job processor
-- Vision API integration
+### Tiered Subscription System (~4-5 hours)
 
-### Frontend (React + Vite)
-- **New** (Oct 6): WorkspaceContext + LayoutManager architecture
-- React 18 + TailwindCSS
-- react-resizable-panels for all panes
-- CodeMirror for markdown editing
-- Port: 5173
+**Goal**: Implement content length limits and smart chunking for production
 
-### Tech Stack
-- Python 3.11 (required)
-- FastAPI (async)
-- PostgreSQL + pgvector
-- Claude Agent SDK
-- React + Vite + TailwindCSS
-- sentence-transformers
+**Read First**: `TIER_SYSTEM_PLAN.md` (complete architecture)
+
+**Tiers**:
+- FREE: 500 tokens, 10/month
+- MEMBER: 2,000 tokens, 50/month
+- PRO: 8,000 tokens, 200/month
+- PREMIUM: UNLIMITED (smart chunking)
+- ENTERPRISE: UNLIMITED + API access
+
+**Implementation Checklist**:
+1. ✅ Update `backend/models/user.py` - Add MEMBER, PRO tiers (5 min)
+2. ✅ Create `backend/services/tier_service.py` - Validation logic (1 hour)
+3. ✅ Create `backend/services/chunking_service.py` - Smart splitting (2 hours)
+4. ✅ Update `backend/api/personifier_routes.py` - Add middleware (1 hour)
+5. ✅ Create `backend/alembic/versions/006_add_tiers.py` - Migration (15 min)
+6. ✅ Write unit tests - `backend/tests/test_tier_service.py` (30 min)
+7. ✅ Manual testing - All tiers (30 min)
+
+**Key Innovation**: PREMIUM tier splits long content (novels, papers) into semantic chunks, processes each, maintains context, and reassembles with smooth transitions.
 
 ---
 
-## 🚀 Development Commands
+## 📊 Artifacts System
 
-### Quick Start
-```bash
-./start.sh    # Starts backend (port 8000) + frontend (port 5173)
+**Endpoints** (all working):
+- `POST /api/artifacts/save` - Create artifact
+- `GET /api/artifacts` - List with filters
+- `GET /api/artifacts/search` - Semantic search (FIXED: route order)
+- `GET /api/artifacts/{id}` - Get details
+- `PATCH /api/artifacts/{id}` - Update
+- `DELETE /api/artifacts/{id}` - Delete
+- `GET /api/artifacts/{id}/lineage` - Get ancestry
+
+**GUI**:
+- Sidebar: 🗂️ Artifacts tab → List with filters
+- Main pane: Click artifact → Opens as tab with full metadata
+- Dropdowns: Fixed contrast (dark bg, light text)
+
+**Auto-Save**:
+- `/api/personify/rewrite` with `save_as_artifact: true`
+- Each transformation creates traceable artifact
+
+**Key Files**:
+- Backend: `backend/models/artifact_models.py`, `backend/services/artifact_service.py`, `backend/api/artifact_routes.py`
+- Frontend: `frontend/src/hooks/useArtifacts.js`, `frontend/src/components/ArtifactBrowser.jsx`
+
+---
+
+## 📊 Personifier System
+
+**Endpoints**:
+- `/api/personify` - Pattern analysis (no rewrite)
+- `/api/personify/rewrite` ⭐ - Production endpoint (Claude API)
+
+**Parameters**:
+- `text`, `strength`, `use_examples`, `n_examples`
+- `save_as_artifact` (bool), `artifact_topics` (list)
+
+**Training**:
+- 396 pairs across 18 domains
+- Quality: 9.2/10
+- Categories: simplification (30%), direct_address (23%), hedging_removal (19%)
+
+---
+
+## 🎓 Key Patterns
+
+**pgvector**: Cast explicitly `text(f"'{embedding_str}'::vector")`
+**Semantic search**: Use `/api/library/chunks?search=query` (pgvector cosine)
+**Artifacts**: All semantic outputs should be saveable
+**Route order**: Specific routes (`/search`) BEFORE parameterized routes (`/{id}`)
+**UI consistency**: Sidebars = lists only, main pane = details
+**Refactor**: Keep files 200-300 lines
+
+---
+
+## 📚 Documentation
+
+**Planning**:
+- `TIER_SYSTEM_PLAN.md` - Complete tier architecture with chunking strategy
+- `SESSION_SUMMARY_OCT10.md` - MCP testing, UI fixes, transformation testing
+
+**Architecture**:
+- `docs/DOCUMENTATION_INDEX.md` - 40+ architectural docs
+- `docs/USER_SYSTEM_ARCHITECTURE.md` - Auth foundation
+
+**Artifacts**:
+- `ARTIFACTS_INTEGRATION_COMPLETE.md` - Phase 1
+- `ARTIFACTS_PHASE2_COMPLETE.md` - Phase 2
+- `MCP_TEST_REPORT_OCT10.md` - Comprehensive MCP testing
+
+**Historical**:
+- `SESSION_SUMMARY_OCT9_*.md` - Personifier development
+- `~/humanizer_root/prime_motivation_report.md` - 3,200 words
+
+---
+
+## 🎯 Architecture Vision
+
+**Semantic Composition Pipeline** (artifacts at every stage):
+```
+Query (anchor embedding)
+  ↓
+Semantic Search → save as artifact (search_results)
+  ↓
+Top N Chunks (interest list)
+  ↓
+Paragraph Extraction → save as artifact (extraction)
+  ↓
+Agent Commentary → save as artifact (commentary)
+  ↓
+Progressive Summarization → save as artifact (summary)
+  ↓
+Transformation → save as artifact (transformation)
+  ↓
+Final Output (fully traceable lineage)
 ```
 
-### Database Operations
-```bash
-cd backend
-
-# Database switching (3 profiles: production, test, archive)
-./dbswitch list                 # List profiles
-./dbswitch switch test          # Switch to test
-./dbswitch current             # Show active
-
-# Database management
-./dbinit stats humanizer        # Statistics
-./dbinit backup humanizer       # Backup to SQL
-./dbinit create new_db         # Create database
-
-# Database exploration
-./dbexplore stats              # Overall stats
-./dbexplore chunks             # Chunk analysis
-./dbexplore embeddings         # Embedding coverage
-./dbexplore low-interest       # Find low-value content
-./dbexplore sample 20          # Random sample
-
-# Embedding generation
-./embedgen plan --min-tokens 15     # Plan (dry run)
-./embedgen queue --min-tokens 15    # Mark for embedding
-./embedgen process                  # Generate embeddings
-./embedgen status                   # Check progress
-./embedgen-all                      # Process all remaining
-
-# Advanced: Clustering & framework discovery
-python3.11 cli/cluster_embeddings.py                    # Discover frameworks
-python3.11 cli/cluster_embeddings.py --export out.json  # Export results
-python3.11 cli/cluster_embeddings.py --limit 5000       # Test subset
-```
-
-See: `backend/DATABASE_SWITCHING.md`, `backend/EMBEDDINGS_GUIDE.md`, `backend/ADVANCED_EMBEDDINGS.md`
-
-### Backend
-```bash
-cd backend
-source venv/bin/activate
-python main.py            # Development server
-pytest                    # Run tests
-```
-
-### Frontend
-```bash
-cd frontend
-npm run dev              # Development server
-npm test                 # Run unit/integration tests (132 tests)
-npm run test:ui          # Visual test runner
-npm run test:coverage    # Coverage report
-npm run test:e2e         # End-to-end tests (Playwright)
-npm run build            # Production build
-```
+**Goal**: Every semantic operation creates artifacts → full provenance → consciousness work
 
 ---
 
-## 🧪 Testing Strategy (Next Priority)
+## 🚧 Future Priorities (After Tier System)
 
-**Why Testing Matters**: The Humanizer mission requires users to trust the interface enough to explore deeply. The "corporeal substrate" (UI) must be reliable, predictable, persistent.
+### Phase 2: Extended Functionality (~4-6 hours)
+1. **Paragraph Extractor** (~1 hour)
+   - Split chunks → embed paragraphs → rank by similarity
+   - Auto-save extractions as artifacts
 
-### Testing Approach
+2. **Auto-save Integration** (~2-3 hours)
+   - Add to `/api/embedding/cluster` → cluster summaries
+   - Add to `/api/library/chunks` (search) → search results
 
-**Unit Tests** (Jest + React Testing Library):
-- WorkspaceContext: Tab management, localStorage persistence
-- LayoutManager: Pane sizing, prop rendering
-- InterestList: Item management, navigation
-- Book components: Section loading, content linking
+3. **Progressive Summarization** (~4-6 hours)
+   - Build hierarchy: chunks → summaries → root
+   - Multi-resolution navigation
 
-**Integration Tests**:
-- Workstation + WorkspaceContext: Tab lifecycle
-- Book builder flow: Create → Edit → Save → Verify
-- Interest list + navigation: Add items → Navigate to them
+### Phase 3: Monetization (~3-4 hours)
+1. **Stripe Integration**
+   - Checkout flow
+   - Webhook handlers
+   - Subscription management
 
-**E2E Tests** (Playwright):
-- User journey: Browse images → View conversation → Add to interest list
-- Book workflow: Open book → Edit section → Add content → Verify persistence
-- Pane persistence: Resize → Refresh → Verify restored
-
-**Test Setup**:
-```bash
-cd frontend
-npm install --save-dev @testing-library/react @testing-library/jest-dom @playwright/test
-```
-
-**Files to Create**:
-```
-frontend/src/__tests__/
-  contexts/WorkspaceContext.test.jsx
-  layout/LayoutManager.test.jsx
-  integration/book-builder.test.jsx
-
-frontend/e2e/
-  user-journeys.spec.js
-```
+2. **Pricing Page UI**
+   - Tier comparison table
+   - Feature highlights
+   - CTA buttons
 
 ---
 
-## 📚 3-Database ChromaDB Architecture
+## 🛠️ MCP Server
 
-**Meta DB** (System Guides - 2 memories):
-```
-Query: "pinned guide best practice"
-```
+**Status**: Configured, 11/12 tools operational
 
-**Production DB** (Dev Context - 15+ memories):
-```
-Query: "session status report"
-Query: "testing suite next session"
-Query: "frontend refactoring"
-```
+**Location**: `~/humanizer_root/humanizer_mcp/`
 
-**Historical DB** (Complete Archive - 547 memories):
-```
-Query: "PDF generation debugging"
-```
+**Config**: `~/.config/claude-code/mcp.json`
 
-Use for: Ultra-think mode when stuck >30min
+**Tools** (12 total):
+- Library: list_books ✅, search_chunks ✅, get_library_stats ⚠️ (minor), search_images ⏳
+- Artifacts: save_artifact ✅, search_artifacts ✅, list_artifacts ✅, get_artifact ✅
+- Interest: track_interest ✅, get_interest_list ✅, get_connections ✅
+- Quantum: read_quantum ⏳ (ready, needs backend)
+
+**Test Report**: See `MCP_TEST_REPORT_OCT10.md`
 
 ---
 
-## 💡 Key Workflow Principles
+## 🐛 Known Issues
 
-### Query Before Code
-**ALWAYS** check ChromaDB memories before implementing:
-1. Query production: Does solution already exist?
-2. Query meta: What are the best practices?
-3. Query historical (if stuck): What failed before?
+### Minor Issues
+1. **get_library_stats MCP wrapper**: Field name mismatch (API works)
+2. **Artifact lineage endpoint**: Minor async issue (not blocking)
 
-### Document After Work
-**ALWAYS** store memory after completing work with proper tags:
-- Status: `todo`, `in-progress`, `completed`
-- Type: `feature`, `bug-fix`, `refactoring`
-- Module: `publication`, `api`, `webgui`, `frontend`
-- Priority: `critical`, `high`, `medium`, `low`
-
-### Refactoring Discipline
-- File exceeds **500 lines** → flag for refactoring
-- File has **>3 distinct concerns** → needs splitting
-- **Target**: 200-300 lines per file
+### Next to Fix
+1. Update MCP wrapper field names
+2. Test paragraph extraction
 
 ---
 
-## 🎓 DEC Jupiter Lesson
-
-**Don't abandon working architecture for the next shiny thing.**
-
-Current humanizer-agent is the **"VAX"** - proven, working, extensible.
-
-**DON'T**: Rewrite with new frameworks
-**DO**: Extend current stack incrementally
-**DO**: Refactor large files systematically
-
-**Principle**: "One basket, one egg" - nurture what works.
-
----
-
-## 🚀 Next Session Priorities
-
-**Updated: Oct 7, 2025 (Night) - Advanced Embeddings Complete, Generation Running**
-
-### Priority 1: Framework Discovery (Once embedgen-all completes)
-
-**Objective**: Discover belief frameworks from 125K embeddings
-
-**Tasks**:
-```bash
-# Run clustering on full database
-python3.11 cli/cluster_embeddings.py
-
-# Export for analysis
-python3.11 cli/cluster_embeddings.py --export frameworks.json
-```
-
-**Expected output**:
-- 30-50 distinct frameworks discovered
-- Top words, representative chunks, time ranges
-- 2D/3D coordinates for visualization
-
-**Interpretation**: "You contain 37 perspectives. None is 'you' - all are constructions. This is anatta."
-
----
-
-### Priority 2: Clustering & Transformation API Endpoints
-
-**Objective**: Expose clustering and transformation arithmetic via API
-
-**Endpoints to build**:
-1. `POST /api/embeddings/cluster` - Cluster user embeddings
-2. `POST /api/embeddings/transform` - Apply transformation arithmetic
-3. `GET /api/embeddings/frameworks` - List discovered frameworks
-4. `POST /api/embeddings/adopt-framework` - Apply discovered framework to content
-
-**Files to create**:
-- `backend/api/embedding_routes.py`
-
----
-
-### Priority 3: Frontend Visualization
-
-**Objective**: Interactive embedding space explorer
-
-**Components to build**:
-1. Scatter plot (Plotly/D3.js) - 2D/3D cluster visualization
-2. Framework browser - Browse discovered frameworks
-3. Transformation preview - Show transformation arithmetic results
-4. Temporal timeline - Track belief evolution (once trajectories implemented)
-
----
-
-### Priority 4: Temporal Trajectory Analysis
-
-**Objective**: Track how embeddings shift over time
-
-**Implementation** (designed in ADVANCED_EMBEDDINGS.md):
-- Track embedding changes over time
-- Detect perspective shifts
-- Identify stability periods
-- Map semantic drift
-
-**Use case**: "Between March-May 2024, your understanding shifted from Materialist → Phenomenological"
-
----
-
-### Priority 5: Technical Debt - API Refactoring
-
-**Files needing refactoring** (>500 lines):
-- `backend/api/vision_routes.py` (643 lines) ← **NEXT TARGET**
-- `backend/api/pipeline_routes.py` (608 lines)
-- `backend/api/routes.py` (567 lines)
-
-**✅ COMPLETED**: `library_routes.py` (1,152 → 5 modular files)
-
----
-
-## ✅ Completed Recent Sessions
-
-### Oct 7, 2025 (Night) - Advanced Embedding Operations ✅
-
-**Objective**: Implement clustering, transformation arithmetic, and framework discovery
-
-**Implementation: Embedding Clustering**
-- **embedding_clustering.py** (400+ lines) - UMAP + HDBSCAN clustering
-- Auto-discover belief frameworks from embeddings
-- 60% accuracy improvement over traditional methods
-- Cluster analysis: top words, representative chunks, time ranges
-- 2D/3D coordinates for visualization
-
-**Implementation: Transformation Arithmetic**
-- **transformation_arithmetic.py** (400+ lines) - Vector operations for transformations
-- Learn PERSONA/NAMESPACE/STYLE as vectors
-- Apply transformations: `chunk + skeptical_vector = skeptical version`
-- Compose transformations (non-commutative)
-- Measure transformation distance
-
-**Implementation: CLI & Documentation**
-- **cluster_embeddings.py** (150+ lines) - Interactive clustering tool
-- **embedgen-all** - Process all remaining embeddings
-- **ADVANCED_EMBEDDINGS.md** (500+ lines) - Comprehensive guide
-
-**Dependencies Added**:
-- umap-learn ^0.5.5 (dimensionality reduction)
-- hdbscan ^0.8.33 (density-based clustering)
-- networkx ^3.2 (graph operations)
-- scikit-learn ^1.4.0 (ML utilities)
-
-**Philosophical Achievement**:
-"This is computational Madhyamaka - embeddings reveal meaning as constructed, impermanent, interdependent."
-
-**Files**: 5 files, +1,510 lines
-**Commit**: 03ac710
-
----
-
-### Oct 7, 2025 (Evening) - Embedding System Complete ✅
-
-**Objective**: Intelligent embedding generation with smart filtering
-
-**Implementation: Database Tools**
-- **dbexplore** (428 lines) - Database exploration CLI
-- **embedgen** (620 lines) - Embedding generation pipeline
-- **EMBEDDINGS_GUIDE.md** (500+ lines) - Workflow documentation
-
-**Smart Filtering**:
-- Identified 125,799 high-value chunks (90%)
-- Skipped 13,433 low-interest (slash commands, "continue", <15 tokens)
-- Ollama integration (mxbai-embed-large, 1024 dims)
-
-**Results**:
-- 10/10 test embeddings successful
-- Semantic search verified (71% match phenomenology → Husserl)
-- Performance: ~50 chunks/sec, ~42 min for full database
-
-**Files**: 3 files, +1,563 lines
-**Commit**: 281de3c
-
----
-
-### Oct 7, 2025 (Earlier) - Database Switching System + Comprehensive Documentation
-
-**Objective**: Enable isolated database testing and create complete platform specification
-
-**Implementation**: Database Switching System
-- **dbswitch** CLI tool (287 lines) - Profile switcher with safety features
-- **dbinit** CLI tool (356 lines) - Database create/backup/restore/stats
-- **3 database profiles**: production.env, test.env, archive.env
-- **Full isolation**: Test archive imports without affecting production
-- **Safety**: Automatic backups, confirmation prompts, API key preservation
-
-**Results**:
-- ✅ Switch between databases with single command
-- ✅ Create/initialize/backup databases via CLI
-- ✅ Tested: production (1.8GB) ↔ test (10MB empty)
-- ✅ macOS-compatible (fixed grep -P → sed patterns)
-- ✅ Documentation: DATABASE_SWITCHING.md + QUICK_START guide
-
-**Implementation**: Comprehensive Documentation
-- **PITCH_DECK_AND_FUNCTIONAL_SPEC.md** (175 pages, 40K+ lines)
-- Complete pitch deck for investors
-- Full functional specifications for developers
-- Database schemas (15+ tables, all indexes)
-- API specs (50+ endpoints with examples)
-- UI/UX specs (component patterns, visual system)
-- 8-week implementation guide
-- Philosophy → Implementation mapping
-- Sufficient for complete platform recreation
-
-**Results**:
-- ✅ Investor-ready pitch deck
-- ✅ Developer handoff documentation
-- ✅ Platform migration specification
-- ✅ AI assistant can recreate entire tool from this spec
-
-**Chrome DevTools MCP Testing**:
-- ✅ Image browser (pagination, search, 8,640 images working)
-- ✅ Conversation viewer (navigation, messages displaying)
-- ✅ Message navigation (prev/next, keyboard shortcuts)
-- ✅ Book builder (sections, preview with LaTeX + images)
-- ✅ Transformations library (list, detail, filters)
-- ✅ Console health (no errors, 132 tests passing)
-
-**Files Created**:
-- backend/dbswitch (executable)
-- backend/dbinit (executable)
-- backend/db_profiles/*.env (3 files)
-- backend/DATABASE_SWITCHING.md
-- backend/QUICK_START_DB_SWITCHING.md
-- PITCH_DECK_AND_FUNCTIONAL_SPEC.md
-
----
-
-### Oct 6-7, 2025 - Major System Overhaul
-
-**Objective**: Break down monolithic `library_routes.py` (1,152 lines) into modular, maintainable files
-
-**Implementation**:
-```
-backend/api/
-├── library_routes.py          35 lines  (orchestrator - includes sub-routers)
-├── library_schemas.py        103 lines  (Pydantic response models)
-├── library_collections.py    323 lines  (collection + message endpoints)
-├── library_media.py          393 lines  (media + search + stats endpoints)
-└── library_transformations.py 365 lines  (transformation library endpoints)
-```
-
-**Results**:
-- ✅ Zero logic changes (pure extraction refactor)
-- ✅ All 12 backend tests passing (test_library_collections.py)
-- ✅ All 132 frontend tests passing
-- ✅ All 11 API routes working correctly
-- ✅ Server running without errors
-- ✅ Fixed deprecation warning (`regex` → `pattern`)
-
-**Architecture Benefits**:
-- **Modularity**: Each file has single responsibility
-- **Maintainability**: All files under 400 lines (target: 200-300)
-- **Scalability**: Easy to add new endpoints to appropriate module
-- **Testability**: Can test modules independently
-
-**API Coverage** (11 routes):
-- Collections: GET /collections, GET /collections/{id}, GET /messages/{id}/chunks
-- Media: GET /media, GET /media/{id}/metadata, GET /media/{id}/file
-- Search: GET /search
-- Stats: GET /stats
-- Transformations: GET /transformations, GET /transformations/{id}, POST /transformations/{id}/reapply
-
----
-
-### Oct 7, 2025 (Part 2) - Full-Page Message Viewer with LaTeX
-
-**Objective**: Replace cramped inspector pane with full-page markdown editor for professional reading experience
-
-**Implementation**:
-
-**New Component**: `MarkdownEditorTab.jsx` (169 lines)
-- **Flip view**: 📝 Edit mode ↔ 👁️ Rendered preview
-- **LaTeX preprocessing**: Automatic delimiter conversion (`\[...\]` → `$$...$$`, `\(...\)` → `$...$`)
-- **Professional typography**: Physics-paper styling with proper spacing, larger fonts, academic aesthetics
-- **Reusable**: Works for messages, books, any markdown content
-
-**Integration**:
-- Updated `Workstation.jsx`: Added `markdownEditor` tab type
-- Updated `ConversationViewer.jsx`: Messages open as full-page tabs (not inspector)
-- Messages fetch all chunks and combine into single document
-
-**Results**:
-- ✅ Messages display in full-page tabs (no more cramped bottom pane)
-- ✅ Beautiful LaTeX rendering with KaTeX (Lagrangian equations, tensors, etc.)
-- ✅ Flip toggle for edit/preview modes
-- ✅ Professional academic paper aesthetics
-- ⚠️ Known issue: Images show JSON metadata (needs custom renderer)
-
-**Bug Fixes**:
-- ✅ Fixed sidebar occlusion (removed `fixed` positioning)
-- ✅ Added `data-testid="sidebar"` for E2E tests
-- ✅ Configured Playwright to use system Chromium
-
----
-
-### Oct 7, 2025 (Part 3) - Image System & Navigation Refactor
-
-**Objective**: Fix image browsing issues and add unified navigation system
-
-**Problems Addressed**:
-1. ❌ ImageGallery limited to 500 images (database has 8,640)
-2. ❌ "Add to Book" button missing from message cards
-3. ❌ No message navigation (prev/next arrows + keyboard)
-4. ❌ No unified navigation system across components
-
-**Implementation**:
-
-**1. Fixed ImageGallery Pagination** (`ImageGallery.jsx`)
-- Added server-side pagination (100 items/page, 87 pages total)
-- Added search and filter support (generator, mime type)
-- Added pagination UI (‹ Page X/Y ›)
-- **Before**: Hardcoded 500 limit
-- **After**: Full access to all 8,640+ images
-
-**2. Restored "Add to Book" Button** (`ConversationViewer.jsx` lines 731-749)
-- Added purple "Add to Book" button next to "View" button
-- Fetches message chunks on click
-- Opens BookSectionSelector modal
-- Users can now add messages to books again
-
-**3. Created useListNavigation Hook** (`hooks/useListNavigation.js` - NEW, 107 lines)
-- **Purpose**: Unified keyboard and UI navigation for ALL lists
-- **Features**:
-  - Keyboard navigation (ArrowUp/Down, Enter, Escape)
-  - Current index tracking with prev/next functions
-  - Selection handling with callbacks
-  - Loop support (optional)
-  - Enable/disable toggle
-- **Reusable**: Works for messages, images, conversations, collections
-
-**4. Integrated Message Navigation** (`ConversationViewer.jsx`)
-- Added Prev/Next buttons with position indicator ("X of Y")
-- Keyboard shortcuts (↑/↓ arrows) work
-- Auto-scroll to message on navigation
-- Current message highlighted (realm-symbolic border)
-- Visual feedback for navigation state
-
-**Results**:
-- ✅ ImageGallery: Can access all 8,640+ images (was 500)
-- ✅ Message Actions: "Add to Book" button restored
-- ✅ Navigation: Prev/Next buttons + keyboard shortcuts work
-- ✅ Visual Feedback: Current message highlighted
-- ✅ Position Indicator: Shows "X of Y" messages
-- ✅ Reusable Hook: Future lists can use same pattern
-
-**Architecture Improvements**:
-- Created foundation for unified navigation across ALL lists
-- Established pattern: Import hook → Pass items → Use handlers
-- All future list components should use `useListNavigation`
-
-**Files Modified**:
-- `frontend/src/components/ImageGallery.jsx` - Pagination added
-- `frontend/src/components/ConversationViewer.jsx` - Navigation + button
-- `frontend/src/hooks/useListNavigation.js` - NEW hook created
-
-**Remaining Work** (Next Session):
-1. Apply `useListNavigation` to other lists (LibraryBrowser, ImageBrowser)
-2. Consolidate ImageGallery and ImageBrowser into one component
-3. Unified action buttons pattern across all lists
-
----
-
-### Oct 6, 2025 - Testing Suite & Frontend Phase 2
-
-### Testing Suite - COMPLETE
-- 132 tests passing (Vitest + Playwright)
-- Unit: WorkspaceContext, LayoutManager, InterestList, SearchBar, SettingsModal, useKeyboardShortcuts
-- Integration: Book builder, Navigation flows
-- E2E: User journeys, pane persistence
-
-### Frontend Phase 2 - COMPLETE
-- **MessageViewer** (352 lines): Non-modal message viewer
-- **WorkspaceContext**: Enhanced with inspector pane state
-- **ConversationViewer**: Refactored to use inspector instead of modal
-- **Architecture**: 100% pane-based, zero modal overlays
-- **SearchBar, SettingsModal, Keyboard shortcuts**: All integrated
-
-### Bug Fixes - COMPLETE
-- Backend media duplicate crash (library_routes.py:715)
-- Frontend duplicate keys (ImageGallery + API deduplication)
-
----
-
-## 📊 Current Test Coverage
-
-**Total Tests**: 132 passing ✅
-- **Unit tests**: 93 (WorkspaceContext, LayoutManager, InterestList, SearchBar, SettingsModal, useKeyboardShortcuts)
-- **Integration tests**: 21 (Book builder, Navigation flows)
-- **E2E tests**: Comprehensive (User journeys, Pane persistence)
-
-**Test Commands**:
-```bash
-npm test                 # Run all unit/integration tests
-npm run test:ui          # Visual test runner
-npm run test:coverage    # Coverage report
-npm run test:e2e         # End-to-end tests
-```
-
----
-
-### Oct 7, 2025 (Part 4) - Critical Bug Fixes & Chrome DevTools MCP Setup
-
-**Objective**: Fix remaining bugs and prepare for comprehensive testing
-
-**Bug Fixes**:
-
-1. **React Hooks Order Violation** (ConversationViewer.jsx:192-229)
-   - **Problem**: `useListNavigation` hook called after early returns, causing "rendered more hooks" error
-   - **Fix**: Moved all hooks (useMemo, useCallback, useListNavigation) BEFORE any return statements
-   - **Result**: Gizmo editing now works, no more hook order crashes
-
-2. **Image Rendering in Books** (MarkdownEditor.jsx:20-50)
-   - **Problem**: Book preview showed raw JSON instead of images
-   - **Fix**: Added image preprocessing (same as MarkdownEditorTab)
-   - **Supports**: Both `sediment://` and `file-service://` protocols
-   - **Result**: Images now render in book preview pane
-
-3. **Book Selector Shows Only One Book** (BookSectionSelector.jsx:48-49)
-   - **Problem**: Only last book showed in selector modal
-   - **Fix**: Removed `user_id` filter to match BookBuilder behavior
-   - **Result**: All books now appear in "Add to Book" modal
-
-4. **Image ID Format Normalization** (3 files)
-   - **Problem**: Uncertain handling of sediment:// vs file-service:// formats
-   - **Analysis**: Database uses `file-XXXXX` (dashes only, zero underscores)
-   - **Fix**: Precise prefix replacement `file_` → `file-` (not all underscores)
-   - **Files**: MarkdownEditorTab.jsx, MarkdownEditor.jsx, ConversationViewer.jsx
-   - **Result**: Safe edge case handling, won't corrupt IDs with legitimate underscores
-
-5. **Text Overflow in Transformations Sidebar** (TransformationsLibrary.jsx)
-   - **Problem**: Text breaking awkwardly, cramped configuration JSON
-   - **Fix**: Added `break-words`, `flex-wrap`, `shrink-0` classes throughout
-   - **Changes**: Date/time layout (vertical), Configuration JSON wrapping, all text elements
-   - **Result**: Proper text wrapping, respects container margins
-
-6. **DOM Nesting Warning** (MarkdownEditorTab.jsx:143-156)
-   - **Problem**: `<pre>` nested in `<p>` causing validation warning
-   - **Fix**: Custom `p` component detects block children, renders as `<div>` when needed
-   - **Result**: No more DOM nesting warnings
-
-**Infrastructure**:
-
-7. **Chrome DevTools MCP Configuration** (~/.claude/mcp_servers.json)
-   - Added `chrome-devtools` MCP server using npx chrome-devtools-mcp@latest
-   - Configured with NVM Node.js path
-   - Ready for comprehensive testing after Claude Code restart
-
-**Files Modified**:
-- `ConversationViewer.jsx`: Hook order, memoization
-- `MarkdownEditor.jsx`: Image + LaTeX preprocessing
-- `MarkdownEditorTab.jsx`: Image preprocessing, DOM nesting fix
-- `BookSectionSelector.jsx`: Remove user_id filter
-- `TransformationsLibrary.jsx`: Text overflow fixes (8 locations)
-- `~/.claude/mcp_servers.json`: Chrome DevTools MCP added
-
-**Testing Status**:
-- ✅ All 132 frontend tests still passing
-- ✅ Server running without errors
-- ✅ Ready for comprehensive end-to-end testing with Chrome DevTools MCP
-
----
-
-*Last Updated: Oct 7, 2025 (Late Evening) - Bug Fixes Complete, Ready for Testing*
+*Updated: Oct 10, 2025*
+*Status: Artifacts operational, Tier system architecture complete*
+*Next: Implement tiered subscription system with smart chunking*
+*Read: TIER_SYSTEM_PLAN.md for implementation details*
